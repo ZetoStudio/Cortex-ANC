@@ -2,9 +2,7 @@ import { ExecutionType } from '@cortex/integration-core/shared-stubs';
 import { ActionContext } from '../context';
 import { InputPropertyMap, StaticPropsValue } from '../property';
 
-export function createMockActionContext<
-  Props extends InputPropertyMap
->(params: {
+export function createMockActionContext<Props extends InputPropertyMap>(params: {
   propsValue: StaticPropsValue<Props>;
 }): ActionContext<undefined, Props> {
   return {
@@ -12,7 +10,7 @@ export function createMockActionContext<
     auth: undefined,
     propsValue: params.propsValue,
     store: {
-      put: async <T>(key: string, value: T) => value,
+      put: async <T>(_key: string, value: T) => value,
       get: async () => null,
       delete: async () => {
         return;

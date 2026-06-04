@@ -6,13 +6,13 @@ Phase 0 + Phase 1 groundwork: integration connectors (from Activepieces), vector
 
 ## Stack
 
-| Layer | Technology |
-| --- | --- |
-| Frontend | Next.js 16.2, React 19, Tailwind v4, shadcn/ui v4 + `@cortex/ui` (from Activepieces) |
-| Monorepo | Bun workspaces + Turborepo |
-| Brain | `@cortex/graph-core` — pgvector + in-memory fallback |
-| Agent | `@cortex/agent-core` — RAG + Groq/Ollama |
-| Integrations | `@cortex/integration-core` — Slack, Gmail, GitHub, Linear, Notion |
+| Layer        | Technology                                                                           |
+| ------------ | ------------------------------------------------------------------------------------ |
+| Frontend     | Next.js 16.2, React 19, Tailwind v4, shadcn/ui v4 + `@cortex/ui` (from Activepieces) |
+| Monorepo     | Bun workspaces + Turborepo                                                           |
+| Brain        | `@cortex/graph-core` — pgvector + in-memory fallback                                 |
+| Agent        | `@cortex/agent-core` — Cortex Brain (`runBrain`) + hybrid RAG                        |
+| Integrations | `@cortex/integration-core` — Slack, Gmail, GitHub, Linear, Notion                    |
 
 ## Prerequisites
 
@@ -41,17 +41,27 @@ bun run build
 bun run db:up
 bun run db:init
 bun run seed
+bun run seed:brain    # vectors + Acme knowledge graph nodes
 
+bun run test:brain    # smoke test LLM pipeline (no web server)
 bun dev
 ```
 
+### Cortex Brain pipeline
+
+```
+Question → reasoning agent → hybrid retrieval (vectors + graph) → response agent (cited answer)
+```
+
+Health check: `GET http://localhost:3000/api/brain/health`
+
 ### Desks
 
-| URL | Purpose |
-| --- | --- |
-| http://localhost:3000/executive-desk | Slack-style exec chat with source citations |
-| http://localhost:3000/clients-desk | Email-style client reply drafting + HITL approve |
-| http://localhost:3000/chat | Simple brain chat |
+| URL                                  | Purpose                                          |
+| ------------------------------------ | ------------------------------------------------ |
+| http://localhost:3000/executive-desk | Slack-style exec chat with source citations      |
+| http://localhost:3000/clients-desk   | Email-style client reply drafting + HITL approve |
+| http://localhost:3000/chat           | Simple brain chat                                |
 
 ### Demo queries
 
@@ -106,24 +116,24 @@ Kafka/Temporal are **not** implemented yet — ingestion is manual/seed-based.
 
 ## API Routes
 
-| Route | Body | Response |
-| --- | --- | --- |
-| `POST /api/executive-ask` | `{ question }` | `{ answer, sources[] }` |
-| `POST /api/client-reply` | `{ emailContent, subject? }` | `{ draft, sources[] }` |
-| `POST /api/chat` | `{ prompt }` | `{ answer, sources[] }` |
+| Route                     | Body                         | Response                |
+| ------------------------- | ---------------------------- | ----------------------- |
+| `POST /api/executive-ask` | `{ question }`               | `{ answer, sources[] }` |
+| `POST /api/client-reply`  | `{ emailContent, subject? }` | `{ draft, sources[] }`  |
+| `POST /api/chat`          | `{ prompt }`                 | `{ answer, sources[] }` |
 
 ## Activepieces UI Reuse
 
 Copied and adapted from `activepieces-main/packages/web/src/components/`:
 
-| Cortex component | Activepieces source |
-| --- | --- |
-| `Spinner` | `custom/spinner.tsx` |
-| `Markdown` | `prompt-kit/markdown.tsx` (simplified) |
-| `ChatMessage*` | `prompt-kit/message.tsx` |
-| `ChatWindow` | `prompt-kit/chat-container.tsx` |
-| `ChatInput` | `prompt-kit/prompt-input.tsx` (simplified) |
-| `Panel*` | `ui/resizable-panel.tsx` |
+| Cortex component | Activepieces source                        |
+| ---------------- | ------------------------------------------ |
+| `Spinner`        | `custom/spinner.tsx`                       |
+| `Markdown`       | `prompt-kit/markdown.tsx` (simplified)     |
+| `ChatMessage*`   | `prompt-kit/message.tsx`                   |
+| `ChatWindow`     | `prompt-kit/chat-container.tsx`            |
+| `ChatInput`      | `prompt-kit/prompt-input.tsx` (simplified) |
+| `Panel*`         | `ui/resizable-panel.tsx`                   |
 
 Not reused: `CopyButton`, `Source` link chips, full `ApMarkdown` variants — minimal replacements in `@cortex/ui`.
 

@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "bun@1.3.3",
-  "workspaces": ["apps/*", "packages/*", "services/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
   "scripts": {
     "dev": "turbo run dev --filter=@cortex/web --filter=@cortex/shared --filter=@cortex/agent-core --filter=@cortex/ui --filter=@cortex/graph-core",
     "build": "turbo run build",
@@ -13,8 +17,14 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
     "smoke:slack": "bun run packages/integration-core/scripts/smoke-slack.ts",
     "seed": "bun run scripts/seed-data.ts",
+    "seed:graph": "bun run scripts/seed-graph.ts",
+    "seed:brain": "bun run scripts/seed-graph.ts",
+    "test:brain": "bun run scripts/test-brain.ts",
     "db:up": "docker compose up -d postgres",
+    "infra:up": "docker compose up -d",
     "db:init": "bash scripts/init-db.sh",
+    "adapt:connectors": "bun run scripts/adapt-connectors.ts",
+    "services:dev": "bun run --filter '@cortex/integration-service' dev & bun run --filter '@cortex/event-consumer' dev",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -31,8 +41,13 @@
     "typescript": "^5.8.2"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{js,json,md}": ["prettier --write"]
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,md}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "baseline-browser-mapping": "^2.10.33",

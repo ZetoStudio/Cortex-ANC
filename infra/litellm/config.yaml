@@ -1,0 +1,12 @@
+model_list:
+  - model_name: cortex-groq
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: cortex-ollama
+    litellm_params:
+      model: ollama/llama3:8b
+      api_base: http://host.docker.internal:11434
+
+general_settings:
+  master_key: cortex-local-dev

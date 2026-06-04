@@ -19,9 +19,12 @@
   },
   "dependencies": {
     "@cortex/graph-core": "workspace:*",
-    "@cortex/shared": "workspace:*"
+    "@cortex/integration-core": "workspace:*",
+    "@cortex/shared": "workspace:*",
+    "pg": "^8.21.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.2",
     "typescript": "^5.8.2"
   }
 }

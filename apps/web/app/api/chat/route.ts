@@ -10,7 +10,11 @@ export async function POST(request: Request) {
     }
 
     const result = await askQuestion(body.prompt.trim());
-    return NextResponse.json({ answer: result.answer, sources: result.sources });
+    return NextResponse.json({
+      answer: result.answer,
+      sources: result.sources,
+      pendingApprovalId: result.pendingApprovalId,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });

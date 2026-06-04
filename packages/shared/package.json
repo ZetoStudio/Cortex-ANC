@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./kafka": {
+      "types": "./dist/kafka/index.d.ts",
+      "import": "./dist/kafka/index.js"
     }
   },
   "scripts": {
@@ -16,6 +20,10 @@
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "pino": "^9.6.0"
   },
   "devDependencies": {
     "@types/node": "^20",

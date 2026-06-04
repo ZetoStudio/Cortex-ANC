@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -16,7 +17,8 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'Cortex — Single Brain Platform',
-  description: 'AI-native company platform connecting every business tool into one intelligent system.',
+  description:
+    'AI-native company platform connecting every business tool into one intelligent system.',
 };
 
 export default function RootLayout({
@@ -24,9 +26,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const body = <body className="min-h-full flex flex-col font-sans">{children}</body>;
+
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable} h-full dark`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      {clerkKey ? <ClerkProvider>{body}</ClerkProvider> : body}
     </html>
   );
 }

@@ -52,5 +52,6 @@ export async function searchSimilar(
 }
 
 export { MemoryVectorStore, PgVectorStore, ensureSchema };
+export { GraphClient, type GraphNode, type GraphEdge } from './graph-client';
 export { MOCK_DOCUMENTS, type MockDocument } from './mock-data';
 export type { DocumentMetadata, SearchFilters, SearchResult } from './types';

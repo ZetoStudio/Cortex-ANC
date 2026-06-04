@@ -8,6 +8,7 @@ node_modules/
 
 # Activepieces vendor (not part of Cortex repo)
 activepieces-main/
+packages/integration-core/src/connectors-adapted/
 
 # Build & cache
 dist/

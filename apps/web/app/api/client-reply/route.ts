@@ -17,6 +17,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       draft: result.draft,
+      pendingApprovalId: result.pendingApprovalId,
       sources: result.sources.map((s) => ({
         id: s.id,
         title: s.title,

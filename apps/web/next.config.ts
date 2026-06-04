@@ -9,10 +9,11 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     '@cortex/shared',
     '@cortex/agent-core',
+    '@cortex/auth',
     '@cortex/graph-core',
-    '@cortex/integration-core',
     '@cortex/ui',
   ],
+  serverExternalPackages: ['pg'],
 };
 
 export default nextConfig;

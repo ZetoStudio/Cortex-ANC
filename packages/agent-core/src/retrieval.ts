@@ -1,4 +1,9 @@
-import { indexDocument, searchSimilar, MOCK_DOCUMENTS, type SearchResult } from '@cortex/graph-core';
+import {
+  indexDocument,
+  searchSimilar,
+  MOCK_DOCUMENTS,
+  type SearchResult,
+} from '@cortex/graph-core';
 
 export type SourceCitation = {
   id: string;
@@ -10,7 +15,7 @@ export type SourceCitation = {
 
 let seeded = false;
 
-async function ensureSeeded(): Promise<void> {
+export async function ensureSeeded(): Promise<void> {
   if (seeded) return;
   for (const doc of MOCK_DOCUMENTS) {
     await indexDocument(doc.id, doc.text, doc.metadata);
@@ -28,7 +33,10 @@ export function toCitations(results: SearchResult[]): SourceCitation[] {
   }));
 }
 
-export async function retrieveContext(query: string, topK = 5): Promise<{
+export async function retrieveContext(
+  query: string,
+  topK = 5,
+): Promise<{
   context: string;
   sources: SourceCitation[];
 }> {
@@ -40,10 +48,7 @@ export async function retrieveContext(query: string, topK = 5): Promise<{
   }
 
   const context = results
-    .map(
-      (r, i) =>
-        `[${i + 1}] (${r.metadata.source}) ${r.metadata.title}: ${r.text}`,
-    )
+    .map((r, i) => `[${i + 1}] (${r.metadata.source}) ${r.metadata.title}: ${r.text}`)
     .join('\n\n');
 
   return { context, sources: toCitations(results) };
