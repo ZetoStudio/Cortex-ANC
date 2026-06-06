@@ -3,6 +3,7 @@ import type { DemoRole } from './demo-users';
 export {
   DEMO_USERS,
   findDemoUser,
+  getDemoUserByRole,
   projectIdsForRole,
   canAccessAdmin,
   type DemoRole,

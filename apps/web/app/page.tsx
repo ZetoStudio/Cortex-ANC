@@ -68,14 +68,11 @@ export default function Home() {
       <section className="snap-section mx-auto max-w-6xl px-6 py-24 text-center">
         <h2 className="font-display text-3xl text-[#111111] md:text-4xl">Ready for your demo?</h2>
         <p className="mx-auto mt-4 max-w-md text-gray-600">
-          Sign in with admin, CEO, or client credentials to explore role-based intelligence.
+          Sign in as CEO or client to see role-scoped intelligence in action.
         </p>
         <Link href="/auth/login" className="btn-primary mt-8 inline-flex px-8 py-3.5">
           Sign in to Cortex
         </Link>
-        <p className="mt-6 font-mono text-xs text-gray-400">
-          admin@cortex.anc · ceo@cortex.anc · client@cortex.anc
-        </p>
       </section>
 
       <footer className="border-t border-gray-100 py-8 text-center text-xs text-gray-400">

@@ -5,26 +5,34 @@
 ```
 User query
     → Reasoning agent (decompose sub-questions)
-    → Hybrid retrieval (pgvector + knowledge graph)
+    → Hybrid retrieval (pgvector + knowledge graph, RBAC-filtered)
     → Action agent (HITL approval for writes)
     → Response agent (cited answer)
 ```
 
-## LLM routing
+## LLM routing (demo: Groq only)
 
-| Env                                  | Path                                |
-| ------------------------------------ | ----------------------------------- |
-| `LITELLM_URL` set                    | All Groq calls → LiteLLM gateway    |
-| `LLM_PROVIDER=groq` + `GROQ_API_KEY` | Direct Groq API                     |
-| `LLM_PROVIDER=ollama`                | Local Ollama (`LOCAL_LLM_ENDPOINT`) |
+| Path            | When                                             |
+| --------------- | ------------------------------------------------ |
+| LiteLLM → Groq  | Default when `LITELLM_URL=http://localhost:4000` |
+| Direct Groq API | Fallback if LiteLLM down                         |
+| Ollama          | **Disabled** for demo (commented in config)      |
 
-Entity extraction & monitoring use `llmClient.completeLocal()` (Ollama, low cost).
+Embeddings use deterministic hash fallback (no Ollama `nomic-embed-text` in demo mode).
+
+## RBAC in retrieval
+
+API routes pass `projectIds` from the signed-in user:
+
+- **CEO:** `acme`, `global-dynamics`
+- **Client:** `betacorp` only
+- **Admin:** all projects
 
 ## Packages
 
-- `@cortex/shared` — `llmClient`, `BRAIN_PROMPTS`, embeddings
+- `@cortex/shared` — `llmClient`, embeddings, Kafka, Temporal client
 - `@cortex/agent-core` — `runBrain()`, `hybridRetrieveContext()`
-- `@cortex/graph-core` — vectors + `GraphClient`
+- `@cortex/graph-core` — pgvector + `GraphClient`
 
 ## Seed the brain
 
@@ -36,5 +44,11 @@ bun run seed:brain
 
 ## API
 
-- `POST /api/executive-ask` — `{ question }` → brain pipeline
-- `POST /api/client-reply` — `{ emailContent }` → draft + approval id
+| Route                     | Body               | Auth                    |
+| ------------------------- | ------------------ | ----------------------- |
+| `POST /api/executive-ask` | `{ question }`     | desk:write              |
+| `POST /api/client-reply`  | `{ emailContent }` | desk:write              |
+| `POST /api/brain/chat`    | `{ prompt }`       | brain:debug (admin/ceo) |
+| `GET /api/brain/health`   | —                  | public                  |
+
+See [Architecture](./architecture.md) for full data flows.

@@ -54,12 +54,37 @@ start_service() {
 start_web() {
   local pidfile="$PID_DIR/web.pid"
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    log "Web already running (pid $(cat "$pidfile"))"
-    return
+    if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+      log "Web already running (pid $(cat "$pidfile"))"
+      return
+    fi
+    kill "$(cat "$pidfile")" 2>/dev/null || true
+    rm -f "$pidfile"
   fi
+  # Clear stale Next.js dev lock / orphaned processes on :3000
+  if lsof -ti :3000 >/dev/null 2>&1; then
+    log "Clearing stale process on port 3000..."
+    lsof -ti :3000 | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
+  rm -f apps/web/.next/dev/lock 2>/dev/null || true
   log "Starting Next.js web on :3000..."
-  nohup bun run dev >>"$LOG_DIR/web.log" 2>&1 &
-  echo $! >"$pidfile"
+  (cd apps/web && nohup bun run dev >>"../../$LOG_DIR/web.log" 2>&1 &)
+  sleep 2
+  # PID of next dev (more reliable than nohup subshell)
+  local web_pid
+  web_pid=$(lsof -ti :3000 2>/dev/null | head -1)
+  if [ -n "$web_pid" ]; then
+    echo "$web_pid" >"$pidfile"
+  fi
+  for i in $(seq 1 60); do
+    if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+      log "Web ready at http://localhost:3000"
+      return
+    fi
+    sleep 1
+  done
+  log "WARNING: Web may still be starting — check .cortex-logs/web.log"
 }
 
 stop_all() {
@@ -96,8 +121,7 @@ case "${1:-start}" in
     echo "   Logs:         .cortex-logs/"
     echo "   Stop:         bun run start:all:stop"
     echo ""
-    echo "Demo logins (password: password):"
-    echo "   admin@cortex.anc | ceo@cortex.anc | client@cortex.anc"
+    echo "Open http://localhost:3000/auth/login — choose CEO or Client"
     ;;
   *)
     echo "Usage: $0 [start|stop]"

@@ -1,8 +1,6 @@
-# Learning notes (local only)
-Learning.md
-
-
-# Local env & secrets
+# Local runtime artifacts
+.cortex-pids/
+.cortex-logs/
 .env
 .env.local
 .env.*.local
@@ -30,8 +28,6 @@ out/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.cortex-pids/
-.cortex-logs/
 
 # Test / coverage
 coverage/
