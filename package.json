@@ -20,7 +20,7 @@
     "seed:graph": "bun run scripts/seed-graph.ts",
     "seed:brain": "bun run scripts/seed-graph.ts",
     "test:brain": "bun run scripts/test-brain.ts",
-    "test:ollama": "bun run scripts/test-ollama.ts",
+    "test:ollama": "echo 'Ollama disabled — using Groq only'",
     "demo": "bash scripts/demo.sh",
     "start:all": "bash scripts/start-all.sh start",
     "start:all:stop": "bash scripts/start-all.sh stop",

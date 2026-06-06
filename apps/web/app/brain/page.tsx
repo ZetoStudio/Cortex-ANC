@@ -23,13 +23,11 @@ type Msg = {
 };
 
 export default function BrainPage() {
-  const [useOllama, setUseOllama] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content:
-        'Brain debug chat. Toggle Ollama to test local fallback via LiteLLM. Raw citations shown below each answer.',
+      content: 'Brain debug chat (Groq via LiteLLM). Raw citations shown below each answer.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -45,7 +43,7 @@ export default function BrainPage() {
       const res = await fetch('/api/brain/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, provider: useOllama ? 'ollama' : 'groq' }),
+        body: JSON.stringify({ prompt, provider: 'groq' }),
       });
       const data = (await res.json()) as {
         answer?: string;
@@ -81,19 +79,11 @@ export default function BrainPage() {
   return (
     <AppShell
       title="Brain Chat"
-      subtitle="Debug hybrid RAG with provider toggle"
+      subtitle="Debug hybrid RAG (Groq)"
       badge={
-        <label className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs">
-          <input
-            type="checkbox"
-            checked={useOllama}
-            onChange={(e) => setUseOllama(e.target.checked)}
-            className="accent-teal-600"
-          />
-          <span className={useOllama ? 'font-medium text-teal-700' : 'text-gray-600'}>
-            {useOllama ? 'Ollama (local)' : 'Groq (primary)'}
-          </span>
-        </label>
+        <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600">
+          Groq / LiteLLM
+        </span>
       }
       footer={
         <ChatInput

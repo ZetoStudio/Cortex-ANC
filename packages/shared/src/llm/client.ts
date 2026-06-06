@@ -18,13 +18,10 @@ export interface LlmOptions {
   agentRole?: AgentRole;
 }
 
-function resolveProvider(explicit?: LlmProvider): LlmProvider {
-  if (explicit) return explicit;
-  const envProvider = process.env.LLM_PROVIDER?.toLowerCase();
-  if (envProvider === 'groq' || envProvider === 'ollama') return envProvider;
-  if (process.env.GROQ_API_KEY) return 'groq';
-  return 'ollama';
-}
+// Ollama disabled for demo — kept for future re-enable
+// function resolveProvider(_explicit?: LlmProvider): LlmProvider {
+//   return 'groq';
+// }
 
 function buildMessages(prompt: string, options: LlmOptions): LlmMessage[] {
   const system =
@@ -103,65 +100,29 @@ async function callGroq(
   throw lastError ?? new Error('Groq request failed');
 }
 
-async function callOllama(
-  messages: LlmMessage[],
-  model: string,
-  temperature: number,
-): Promise<string> {
-  const endpoint = process.env.LOCAL_LLM_ENDPOINT ?? 'http://localhost:11434';
-  try {
-    const response = await httpClient.post<{ message: { content: string } }>(
-      `${endpoint.replace(/\/$/, '')}/api/chat`,
-      {
-        model,
-        messages,
-        stream: false,
-        options: { temperature },
-      },
-    );
-    return response.data.message?.content ?? '';
-  } catch {
-    throw new Error(
-      `Ollama unavailable at ${endpoint}. Start Ollama or set LLM_PROVIDER=groq with GROQ_API_KEY.`,
-    );
-  }
-}
+// Ollama disabled for demo
+// async function callOllama(...) { ... }
 
 async function llmChat(messages: LlmMessage[], options: LlmOptions = {}): Promise<string> {
-  const provider = resolveProvider(options.provider);
   const temperature = options.temperature ?? 0.7;
+  const model = options.model ?? process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
+  return callGroq(messages, model, temperature, options.maxTokens);
 
-  if (provider === 'groq') {
-    const model = options.model ?? process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
-    return callGroq(messages, model, temperature, options.maxTokens);
-  }
-
-  const model = options.model ?? process.env.LOCAL_LLM_MODEL ?? 'llama3:8b';
-  return callOllama(messages, model, temperature);
+  // Ollama path disabled for demo:
+  // if (resolveProvider(options.provider) === 'ollama') {
+  //   return callOllama(messages, options.model ?? 'llama3:8b', temperature);
+  // }
 }
 
 export async function llmComplete(prompt: string, options: LlmOptions = {}): Promise<string> {
   return llmChat(buildMessages(prompt, options), options);
 }
 
-/** Low-cost local model for entity extraction and monitoring. */
+/** Cheap Groq pass for entity extraction / monitoring (Ollama disabled). */
 export async function llmCompleteLocal(prompt: string, temperature = 0): Promise<string> {
-  if (litellmBase()) {
-    try {
-      return await callLiteLLM(
-        [{ role: 'user', content: prompt }],
-        'cortex-ollama',
-        temperature,
-        256,
-      );
-    } catch {
-      // fall through to direct Ollama
-    }
-  }
   return llmChat([{ role: 'user', content: prompt }], {
-    provider: 'ollama',
     temperature,
-    model: process.env.LOCAL_LLM_MODEL ?? 'llama3:8b',
+    maxTokens: 256,
   });
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the full Cortex demo stack in the background (Ollama + Docker + services + web).
+# Start the full Cortex demo stack in the background (Docker + services + web).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -21,41 +21,16 @@ ensure_env() {
   if ! grep -q NEXTAUTH_URL .env 2>/dev/null; then
     echo "NEXTAUTH_URL=http://localhost:3000" >> .env
   fi
+  # Groq-only for demo (Ollama disabled)
+  if grep -q '^LLM_PROVIDER=' .env 2>/dev/null; then
+    sed -i.bak 's/^LLM_PROVIDER=.*/LLM_PROVIDER=groq/' .env && rm -f .env.bak
+  else
+    echo "LLM_PROVIDER=groq" >> .env
+  fi
 }
 
-start_ollama() {
-  if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
-    log "Ollama already running on :11434"
-    return
-  fi
-  if ! command -v ollama >/dev/null 2>&1; then
-    log "WARNING: Ollama not installed — skip (Groq will be used)"
-    return
-  fi
-  # macOS: launch the Ollama app (more reliable than ollama serve in nohup)
-  if [[ "$(uname)" == "Darwin" ]] && [ -d "/Applications/Ollama.app" ]; then
-    log "Opening Ollama.app..."
-    open -a Ollama 2>/dev/null || true
-  else
-    log "Starting ollama serve in background..."
-    nohup ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
-    echo $! >"$PID_DIR/ollama.pid"
-  fi
-  for i in $(seq 1 45); do
-    if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
-      log "Ollama ready"
-      break
-    fi
-    sleep 1
-  done
-  if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
-    log "WARNING: Ollama not reachable — Groq will be used as primary"
-    return
-  fi
-  log "Pulling models (llama3:8b, nomic-embed-text) if missing..."
-  ollama pull llama3:8b >>"$LOG_DIR/ollama.log" 2>&1 || true
-  ollama pull nomic-embed-text >>"$LOG_DIR/ollama.log" 2>&1 || true
-}
+# Ollama disabled for demo — Groq via LiteLLM only.
+# start_ollama() { ... }
 
 start_docker() {
   log "Starting Docker infra..."
@@ -107,16 +82,14 @@ case "${1:-start}" in
     ;;
   start)
     ensure_env
-    start_ollama
     start_docker
     start_service integration-service '@cortex/integration-service'
     start_service event-consumer '@cortex/event-consumer'
     start_service temporal-worker '@cortex/temporal-worker'
     start_web
     echo ""
-    echo "✅ Cortex stack running in background"
+    echo "✅ Cortex stack running in background (Groq only)"
     echo "   Web:          http://localhost:3000"
-    echo "   Ollama:       http://localhost:11434"
     echo "   LiteLLM:      http://localhost:4000"
     echo "   Temporal UI:  http://localhost:8088"
     echo "   Kafka UI:     http://localhost:9080"
