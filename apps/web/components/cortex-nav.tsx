@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut, useSession } from 'next-auth/react';
 import { CortexLogo } from '@cortex/ui';
-
-import { ClerkUserSlot } from './clerk-user-slot';
 
 const links = [
   { href: '/executive-desk', label: 'Executive' },
@@ -18,6 +17,8 @@ const links = [
 
 export function CortexNav() {
   const pathname = usePathname();
+  const { data: session, status } = useSession();
+  const user = session?.user;
 
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -39,7 +40,24 @@ export function CortexNav() {
           </Link>
         ))}
       </nav>
-      <ClerkUserSlot />
+      <div className="flex items-center gap-3 text-sm text-[#94a3b8]">
+        {status === 'loading' ? null : user ? (
+          <>
+            <span>{user.name ?? user.email}</span>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: '/auth/login' })}
+              className="rounded-lg px-2 py-1 text-xs hover:bg-white/5 hover:text-white"
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <Link href="/auth/login" className="hover:text-white">
+            Sign in
+          </Link>
+        )}
+      </div>
     </header>
   );
 }
