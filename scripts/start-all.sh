@@ -29,19 +29,29 @@ start_ollama() {
     return
   fi
   if ! command -v ollama >/dev/null 2>&1; then
-    log "⚠️  Ollama not installed — skip (Groq will be used)"
+    log "WARNING: Ollama not installed — skip (Groq will be used)"
     return
   fi
-  log "Starting Ollama serve in background..."
-  nohup ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
-  echo $! >"$PID_DIR/ollama.pid"
-  for i in $(seq 1 30); do
+  # macOS: launch the Ollama app (more reliable than ollama serve in nohup)
+  if [[ "$(uname)" == "Darwin" ]] && [ -d "/Applications/Ollama.app" ]; then
+    log "Opening Ollama.app..."
+    open -a Ollama 2>/dev/null || true
+  else
+    log "Starting ollama serve in background..."
+    nohup ollama serve >>"$LOG_DIR/ollama.log" 2>&1 &
+    echo $! >"$PID_DIR/ollama.pid"
+  fi
+  for i in $(seq 1 45); do
     if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
       log "Ollama ready"
       break
     fi
     sleep 1
   done
+  if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+    log "WARNING: Ollama not reachable — Groq will be used as primary"
+    return
+  fi
   log "Pulling models (llama3:8b, nomic-embed-text) if missing..."
   ollama pull llama3:8b >>"$LOG_DIR/ollama.log" 2>&1 || true
   ollama pull nomic-embed-text >>"$LOG_DIR/ollama.log" 2>&1 || true
