@@ -1,18 +1,19 @@
 # Cortex Platform
 
-**The Single Brain for Your Entire Business** — AI-native company OS with hybrid RAG, 700+ connectors, and role-based desks.
+**The single brain for your entire business.**
 
 ## Documentation
 
-All docs live in **[`docs/`](./docs/README.md)**:
+Product docs — read in order:
 
-- [Getting started](./docs/getting-started.md) — install & run
-- [Demo guide](./docs/demo-guide.md) — CEO / Client demo flows
-- [Project status](./docs/status.md) — ~95% demo-ready
-- [Architecture](./docs/architecture.md) — full tech-stack map
-- [Brain pipeline](./docs/BRAIN.md) — LLM + RAG
+1. [The Brain](./docs/brain.md) — what Cortex is
+2. [How Cortex works](./docs/architecture.md) — product architecture
+3. [Executive guide](./docs/executive-guide.md) — leadership & CEO
+4. [Client guide](./docs/client-guide.md) — external customer (BetaCorp)
 
-## Quick start
+Full index: **[docs/README.md](./docs/README.md)**
+
+## Run locally (developers)
 
 ```bash
 cp .env.example .env    # set GROQ_API_KEY
@@ -21,15 +22,23 @@ bun run demo            # first time
 bun run start:all       # full stack
 ```
 
-Open http://localhost:3000 → **Sign in as CEO** or **Sign in as Client**
-
-## Stop (save resources)
+Open http://localhost:3000/auth/login
 
 ```bash
-bun run start:all:stop
-docker compose down
+bun run start:all:stop  # stop background services
+docker compose down     # stop containers
 ```
 
-## Stack
+## Demo accounts
 
-Next.js 16 · Bun/Turborepo · Postgres/pgvector · Kafka · Temporal · LiteLLM/Groq · NextAuth demo RBAC
+Not shown on the login page:
+
+| Role   | Email               | Password   |
+| ------ | ------------------- | ---------- |
+| CEO    | `ceo@cortex.anc`    | `password` |
+| Client | `client@cortex.anc` | `password` |
+| Admin  | `admin@cortex.anc`  | `password` |
+
+**CEO** → Acme + Global Dynamics (internal). **Client** → BetaCorp only. **Admin** → all projects + admin tools.
+
+See [Executive guide](./docs/executive-guide.md) and [Client guide](./docs/client-guide.md) for role-specific walkthroughs.

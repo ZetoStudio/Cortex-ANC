@@ -121,7 +121,7 @@ case "${1:-start}" in
     echo "   Logs:         .cortex-logs/"
     echo "   Stop:         bun run start:all:stop"
     echo ""
-    echo "Open http://localhost:3000/auth/login — choose CEO or Client"
+    echo "Open http://localhost:3000/auth/login — see docs/client-guide.md or docs/executive-guide.md"
     ;;
   *)
     echo "Usage: $0 [start|stop]"
