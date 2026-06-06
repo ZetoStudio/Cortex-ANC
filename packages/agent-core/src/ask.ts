@@ -1,3 +1,5 @@
+import type { LlmProvider } from '@cortex/shared';
+
 import { runOrchestrator } from './orchestrator';
 import type { SourceCitation } from './retrieval';
 
@@ -9,8 +11,16 @@ export type AskQuestionResult = {
   citationsFormatted?: string;
 };
 
-export async function askQuestion(prompt: string): Promise<AskQuestionResult> {
-  const result = await runOrchestrator(prompt);
+export type AskOptions = {
+  projectIds?: string[];
+  provider?: LlmProvider;
+};
+
+export async function askQuestion(
+  prompt: string,
+  options?: AskOptions,
+): Promise<AskQuestionResult> {
+  const result = await runOrchestrator(prompt, options);
   return {
     answer: result.answer,
     sources: result.sources,

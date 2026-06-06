@@ -10,8 +10,13 @@ export type ClientReplyResult = {
   pendingApprovalId?: string;
 };
 
-export async function draftClientReply(emailContent: string): Promise<ClientReplyResult> {
-  const { context, sources, graphContext } = await hybridRetrieveContext(emailContent, 6);
+export async function draftClientReply(
+  emailContent: string,
+  options?: { projectIds?: string[] },
+): Promise<ClientReplyResult> {
+  const { context, sources, graphContext } = await hybridRetrieveContext(emailContent, 6, {
+    projectIds: options?.projectIds,
+  });
 
   const draft = await llmClient.complete(
     `Client email:\n${emailContent}\n\nCompany context:\n${context || 'No context.'}${

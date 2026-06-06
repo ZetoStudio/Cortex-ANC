@@ -24,5 +24,6 @@ export type SearchResult = {
 export type SearchFilters = {
   source?: string;
   project?: string;
+  projectIds?: string[];
   type?: string;
 };

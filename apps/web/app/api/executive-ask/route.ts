@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import pg from 'pg';
 
+import { withAuth } from '@/lib/auth';
+
 const { Pool } = pg;
 
 async function logInteraction(query: string, answer: string, sources: unknown[]): Promise<void> {
@@ -22,41 +24,42 @@ async function logInteraction(query: string, answer: string, sources: unknown[])
     );
     await pool.end();
   }
-  // Kafka logging runs in monitoring-agent via DB poll or separate worker when enabled
-  void id;
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = (await request.json()) as { question?: string };
+export const POST = withAuth(
+  async (request, { user }) => {
+    try {
+      const body = (await request.json()) as { question?: string; provider?: 'groq' | 'ollama' };
 
-    if (!body.question?.trim()) {
-      return NextResponse.json({ error: 'question is required' }, { status: 400 });
-    }
+      if (!body.question?.trim()) {
+        return NextResponse.json({ error: 'question is required' }, { status: 400 });
+      }
 
-    const result = await askQuestion(body.question.trim());
-    const sources = result.sources.map((s) => ({
-      id: s.id,
-      title: s.title,
-      source: s.source,
-      excerpt: s.excerpt,
-    }));
-
-    await logInteraction(body.question.trim(), result.answer, sources);
-
-    return NextResponse.json({
-      answer: result.answer,
-      sources,
-      pendingApprovalId: result.pendingApprovalId,
-      steps: result.steps,
-      citations: sources.map((s, i) => ({
-        ref: i + 1,
+      const result = await askQuestion(body.question.trim(), {
+        projectIds: user.projectIds,
+        provider: body.provider,
+      });
+      const sources = result.sources.map((s) => ({
+        id: s.id,
         title: s.title,
         source: s.source,
-      })),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
+        excerpt: s.excerpt,
+      }));
+
+      await logInteraction(body.question.trim(), result.answer, sources);
+
+      return NextResponse.json({
+        answer: result.answer,
+        sources,
+        pendingApprovalId: result.pendingApprovalId,
+        steps: result.steps,
+        role: user.role,
+        projectIds: user.projectIds,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Internal server error';
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  },
+  ['desk:write'],
+);

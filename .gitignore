@@ -36,3 +36,4 @@ coverage/
 
 # Docker volumes (if any local)
 *.pem
+node_modules

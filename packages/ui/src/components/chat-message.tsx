@@ -13,6 +13,7 @@ export function ChatMessage({
   children: React.ReactNode;
   className?: string;
   role?: 'user' | 'assistant' | 'system';
+  variant?: 'dark' | 'light';
 }) {
   return (
     <div
@@ -31,15 +32,23 @@ export function ChatMessageAvatar({
   fallback,
   className,
   variant = 'default',
+  theme = 'dark',
 }: {
   fallback: string;
   className?: string;
   variant?: 'default' | 'user' | 'cortex';
+  theme?: 'dark' | 'light';
 }) {
   const styles = {
     default: 'border border-white/10 bg-[#1a1d2e] text-[#cbd5e1]',
-    user: 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_0_16px_rgba(59,130,246,0.35)]',
-    cortex: 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.25)]',
+    user:
+      theme === 'light'
+        ? 'bg-[#111111] text-white'
+        : 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_0_16px_rgba(59,130,246,0.35)]',
+    cortex:
+      theme === 'light'
+        ? 'border border-teal-200 bg-teal-50 text-teal-800'
+        : 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.25)]',
   };
   return (
     <div
@@ -59,17 +68,23 @@ export function ChatMessageContent({
   markdown = false,
   className,
   role = 'assistant',
+  variant = 'dark',
 }: {
   children: React.ReactNode;
   markdown?: boolean;
   className?: string;
   role?: 'user' | 'assistant';
+  variant?: 'dark' | 'light';
 }) {
   const base = cn(
     'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed break-words',
-    role === 'user'
-      ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_4px_24px_rgba(59,130,246,0.25)]'
-      : 'glass glass-hover text-[#cbd5e1] shadow-[0_0_20px_rgba(139,92,246,0.08)]',
+    variant === 'light'
+      ? role === 'user'
+        ? 'bg-[#111111] text-white'
+        : 'border border-gray-200 bg-white text-gray-800 shadow-sm'
+      : role === 'user'
+        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_4px_24px_rgba(59,130,246,0.25)]'
+        : 'glass glass-hover text-[#cbd5e1] shadow-[0_0_20px_rgba(139,92,246,0.08)]',
     className,
   );
 
@@ -91,16 +106,42 @@ export type SourceCitationProps = {
   excerpt?: string;
 };
 
-export function SourceCitations({ sources }: { sources: SourceCitationProps[] }) {
+export function SourceCitations({
+  sources,
+  variant = 'dark',
+}: {
+  sources: SourceCitationProps[];
+  variant?: 'dark' | 'light';
+}) {
   if (!sources.length) return null;
 
   return (
-    <div className="glass mt-2 space-y-1.5 p-3">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-cyan-400/80">Sources</p>
+    <div
+      className={cn(
+        'mt-2 space-y-1.5 rounded-xl p-3',
+        variant === 'light' ? 'border border-gray-200 bg-gray-50' : 'glass',
+      )}
+    >
+      <p
+        className={cn(
+          'font-mono text-[10px] uppercase tracking-wider',
+          variant === 'light' ? 'text-teal-700' : 'text-cyan-400/80',
+        )}
+      >
+        Sources
+      </p>
       <ul className="space-y-1">
         {sources.map((source) => (
-          <li key={source.id} className="text-xs text-[#94a3b8]">
-            <span className="font-medium text-cyan-300">[{source.source}]</span> {source.title}
+          <li
+            key={source.id}
+            className={cn('text-xs', variant === 'light' ? 'text-gray-600' : 'text-[#94a3b8]')}
+          >
+            <span
+              className={cn('font-medium', variant === 'light' ? 'text-teal-700' : 'text-cyan-300')}
+            >
+              [{source.source}]
+            </span>{' '}
+            {source.title}
           </li>
         ))}
       </ul>

@@ -20,6 +20,10 @@ function matchesFilters(metadata: DocumentMetadata, filters?: SearchFilters): bo
   if (!filters) return true;
   if (filters.source && metadata.source !== filters.source) return false;
   if (filters.project && metadata.project !== filters.project) return false;
+  if (filters.projectIds?.length) {
+    const pid = metadata.project_id as string | undefined;
+    if (!pid || !filters.projectIds.includes(pid)) return false;
+  }
   if (filters.type && metadata.type !== filters.type) return false;
   return true;
 }
@@ -32,11 +36,7 @@ export class MemoryVectorStore {
     this.documents.set(id, { id, text, metadata, embedding });
   }
 
-  async searchSimilar(
-    query: string,
-    topK = 5,
-    filters?: SearchFilters,
-  ): Promise<SearchResult[]> {
+  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
     const queryEmbedding = await embedText(query);
     const results: SearchResult[] = [];
 

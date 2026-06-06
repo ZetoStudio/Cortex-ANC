@@ -53,11 +53,7 @@ export class PgVectorStore {
     );
   }
 
-  async searchSimilar(
-    query: string,
-    topK = 5,
-    filters?: SearchFilters,
-  ): Promise<SearchResult[]> {
+  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
     const embedding = await embedText(query);
     const vectorLiteral = `[${embedding.join(',')}]`;
 
@@ -71,6 +67,10 @@ export class PgVectorStore {
     if (filters?.project) {
       params.push(filters.project);
       conditions.push(`metadata->>'project' = $${params.length}`);
+    }
+    if (filters?.projectIds?.length) {
+      params.push(filters.projectIds);
+      conditions.push(`metadata->>'project_id' = ANY($${params.length}::text[])`);
     }
     if (filters?.type) {
       params.push(filters.type);

@@ -1,11 +1,18 @@
 import { GraphClient, searchSimilar, type SearchResult } from '@cortex/graph-core';
+import type { LlmProvider } from '@cortex/shared';
 
 import { ensureSeeded, toCitations, type SourceCitation } from './retrieval';
+
+export type RetrieveOptions = {
+  projectIds?: string[];
+  provider?: LlmProvider;
+};
 
 const ENTITY_PATTERNS = [
   /\b(?:project|feature|ticket|issue)\s+([A-Za-z0-9_-]+)/gi,
   /\bAcme\b/gi,
-  /\bFeature\s+X\b/gi,
+  /\bBetaCorp\b/gi,
+  /\bGlobal Dynamics\b/gi,
   /\b([A-Z]{2,}-\d+)\b/g,
 ];
 
@@ -13,14 +20,14 @@ function extractEntityHints(query: string): string[] {
   const hints = new Set<string>();
   for (const pattern of ENTITY_PATTERNS) {
     const re = new RegExp(pattern.source, pattern.flags);
-    const matches = query.matchAll(re);
-    for (const m of matches) {
+    for (const m of query.matchAll(re)) {
       const val = (m[1] ?? m[0]).trim();
       if (val.length > 1) hints.add(val);
     }
   }
   if (/\bacme\b/i.test(query)) hints.add('Acme');
-  if (/feature\s*x/i.test(query)) hints.add('Feature X');
+  if (/\bbetacorp\b/i.test(query)) hints.add('BetaCorp');
+  if (/global\s*dynamics/i.test(query)) hints.add('Global Dynamics');
   return [...hints];
 }
 
@@ -42,9 +49,14 @@ function rankResults(results: SearchResult[], query: string): SearchResult[] {
 export async function hybridRetrieveContext(
   query: string,
   topK = 5,
+  options?: RetrieveOptions,
 ): Promise<{ context: string; sources: SourceCitation[]; graphContext: string }> {
   await ensureSeeded();
-  const vectorResults = rankResults(await searchSimilar(query, topK * 2), query).slice(0, topK);
+  const filters = options?.projectIds?.length ? { projectIds: options.projectIds } : undefined;
+  const vectorResults = rankResults(await searchSimilar(query, topK * 2, filters), query).slice(
+    0,
+    topK,
+  );
   const hints = extractEntityHints(query);
 
   const graphLines: string[] = [];
@@ -55,7 +67,7 @@ export async function hybridRetrieveContext(
     try {
       const graph = new GraphClient(dbUrl);
       for (const hint of hints.slice(0, 3)) {
-        const nodes = await graph.findNodesByLabel(hint, 5);
+        const nodes = await graph.findNodesByLabel(hint, 5, options?.projectIds);
         for (const node of nodes) {
           if (seenNodeIds.has(node.id)) continue;
           seenNodeIds.add(node.id);

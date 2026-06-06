@@ -1,9 +1,5 @@
-import { ChatPanel } from '@/components/chat/chat-panel';
+import { redirect } from 'next/navigation';
 
-export default function ChatPage() {
-  return (
-    <div className="min-h-screen">
-      <ChatPanel />
-    </div>
-  );
+export default function ChatRedirect() {
+  redirect('/brain');
 }

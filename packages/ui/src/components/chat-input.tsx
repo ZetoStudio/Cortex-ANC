@@ -13,6 +13,7 @@ export type ChatInputProps = {
   disabled?: boolean;
   isLoading?: boolean;
   className?: string;
+  variant?: 'dark' | 'light';
 };
 
 export function ChatInput({
@@ -23,6 +24,7 @@ export function ChatInput({
   disabled = false,
   isLoading = false,
   className,
+  variant = 'dark',
 }: ChatInputProps) {
   const [internalValue, setInternalValue] = useState(value ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,7 +50,9 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        'glass flex items-end gap-2 p-2 transition-all duration-200 focus-within:border-purple-500/40 focus-within:shadow-[0_0_24px_rgba(59,130,246,0.15)]',
+        variant === 'light'
+          ? 'flex items-end gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-500/20'
+          : 'glass flex items-end gap-2 p-2 transition-all duration-200 focus-within:border-purple-500/40 focus-within:shadow-[0_0_24px_rgba(59,130,246,0.15)]',
         disabled && 'opacity-60',
         className,
       )}
@@ -66,13 +70,19 @@ export function ChatInput({
         placeholder={placeholder}
         disabled={disabled || isLoading}
         rows={1}
-        className="input-dark min-h-[44px] max-h-40 flex-1 resize-none border-none bg-transparent px-2 py-2 text-sm"
+        className={cn(
+          'min-h-[44px] max-h-40 flex-1 resize-none border-none bg-transparent px-2 py-2 text-sm outline-none',
+          variant === 'light' ? 'text-[#111111] placeholder:text-gray-400' : 'input-dark',
+        )}
       />
       <button
         type="button"
         onClick={handleSubmit}
         disabled={disabled || isLoading || !currentValue.trim()}
-        className="btn-gradient inline-flex size-10 shrink-0 items-center justify-center rounded-xl disabled:opacity-50"
+        className={cn(
+          'inline-flex size-10 shrink-0 items-center justify-center rounded-xl disabled:opacity-50',
+          variant === 'light' ? 'bg-teal-600 text-white hover:bg-teal-700' : 'btn-gradient',
+        )}
       >
         <Send className="size-4" />
       </button>

@@ -51,7 +51,13 @@ export class GraphClient {
     return id;
   }
 
-  async findNodesByLabel(query: string, limit = 10): Promise<GraphNode[]> {
+  async findNodesByLabel(query: string, limit = 10, projectIds?: string[]): Promise<GraphNode[]> {
+    const params: unknown[] = [`%${query}%`, limit];
+    let projectClause = '';
+    if (projectIds?.length) {
+      params.push(projectIds);
+      projectClause = ` AND (properties->>'project_id' = ANY($${params.length}::text[]) OR properties->>'project_id' IS NULL)`;
+    }
     const result = await this.pool.query<{
       id: string;
       label: string;
@@ -59,11 +65,15 @@ export class GraphClient {
       properties: Record<string, unknown>;
     }>(
       `SELECT id, label, type, properties FROM cortex_nodes
-       WHERE label ILIKE $1 OR properties::text ILIKE $1
+       WHERE (label ILIKE $1 OR properties::text ILIKE $1)${projectClause}
        LIMIT $2`,
-      [`%${query}%`, limit],
+      params,
     );
-    return result.rows;
+    return result.rows.filter((n) => {
+      if (!projectIds?.length) return true;
+      const pid = n.properties.project_id as string | undefined;
+      return !pid || projectIds.includes(pid);
+    });
   }
 
   async traverse(fromId: string, depth = 2): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {

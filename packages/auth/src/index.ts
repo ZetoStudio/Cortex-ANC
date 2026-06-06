@@ -1,46 +1,49 @@
-export type CortexRole = 'owner' | 'member' | 'viewer';
+import type { DemoRole } from './demo-users';
+
+export {
+  DEMO_USERS,
+  findDemoUser,
+  projectIdsForRole,
+  canAccessAdmin,
+  type DemoRole,
+  type DemoUser,
+} from './demo-users';
+
+export type CortexRole = DemoRole;
 
 export type AuthUser = {
   id: string;
-  email?: string;
-  name?: string;
+  email: string;
+  name: string;
   role: CortexRole;
-  organizationId?: string;
+  projectIds: string[];
 };
 
-/** Static Permit.io-style policy map until live API is wired. */
 const ROLE_PERMISSIONS: Record<CortexRole, string[]> = {
-  owner: [
+  admin: [
     'desk:read',
     'desk:write',
     'approval:decide',
     'connector:manage',
     'admin:read',
     'graph:read',
+    'brain:debug',
   ],
-  member: ['desk:read', 'desk:write', 'approval:decide', 'graph:read'],
-  viewer: ['desk:read', 'graph:read'],
+  ceo: ['desk:read', 'desk:write', 'approval:decide', 'admin:read', 'graph:read', 'brain:debug'],
+  client: ['desk:read', 'desk:write', 'graph:read'],
 };
 
-export function can(user: AuthUser | null, action: string, _resource?: string): boolean {
+export function can(user: AuthUser | null, action: string): boolean {
   if (!user) return false;
-  const perms = ROLE_PERMISSIONS[user.role] ?? [];
-  return perms.includes(action);
+  return (ROLE_PERMISSIONS[user.role] ?? []).includes(action);
 }
 
-export function roleFromClerkMetadata(meta?: Record<string, unknown>): CortexRole {
-  const role = meta?.cortexRole ?? meta?.role;
-  if (role === 'owner' || role === 'member' || role === 'viewer') return role;
-  return 'member';
-}
-
-export async function getUserFromClerkId(
-  clerkUserId: string,
-  fetcher?: (id: string) => Promise<AuthUser | null>,
-): Promise<AuthUser | null> {
-  if (fetcher) return fetcher(clerkUserId);
-  return {
-    id: clerkUserId,
-    role: 'member',
-  };
+export function toAuthUser(demo: {
+  id: string;
+  email: string;
+  name: string;
+  role: CortexRole;
+  projectIds: string[];
+}): AuthUser {
+  return demo;
 }

@@ -128,6 +128,73 @@ export const MOCK_DOCUMENTS: MockDocument[] = [
       title: 'BetaCo Feature X timeline question',
       type: 'email',
       project: 'Feature X',
+      project_id: 'acme',
+    },
+  },
+  {
+    id: 'linear-gd-301',
+    text: 'Linear GD-301: Global Dynamics enterprise rollout — Phase 1 complete. Phase 2 blocked on SSO integration with client IdP. Owner: Security team. ETA: July 1 if IdP credentials received.',
+    metadata: {
+      source: 'linear',
+      title: 'GD-301 — SSO integration blocker',
+      type: 'ticket',
+      project: 'Global Dynamics',
+      project_id: 'global-dynamics',
+    },
+  },
+  {
+    id: 'slack-gd-update',
+    text: 'Slack #global-dynamics: Client VP requested weekly status calls. Deal value $450K ARR. Risk: SSO delay may push go-live to Q3.',
+    metadata: {
+      source: 'slack',
+      title: '#global-dynamics weekly update',
+      type: 'message',
+      project: 'Global Dynamics',
+      project_id: 'global-dynamics',
+    },
+  },
+  {
+    id: 'github-gd-pr-12',
+    text: 'GitHub PR #12 (global-dynamics/portal): SAML SSO handler. Waiting on client metadata XML. Reviewers: @security-lead.',
+    metadata: {
+      source: 'github',
+      title: 'PR #12 — SAML SSO',
+      type: 'pull_request',
+      project: 'Global Dynamics',
+      project_id: 'global-dynamics',
+    },
+  },
+  {
+    id: 'linear-beta-101',
+    text: 'Linear BETA-101: BetaCorp dashboard refresh — UI complete, awaiting client UAT feedback. On track for June 18 delivery.',
+    metadata: {
+      source: 'linear',
+      title: 'BETA-101 — Dashboard refresh',
+      type: 'ticket',
+      project: 'BetaCorp',
+      project_id: 'betacorp',
+    },
+  },
+  {
+    id: 'slack-beta-status',
+    text: 'Slack DM with BetaCorp (Maria): Dashboard v2 looks great. One bug: export CSV truncates rows. Fix ETA June 10.',
+    metadata: {
+      source: 'slack',
+      title: 'BetaCorp UAT feedback',
+      type: 'message',
+      project: 'BetaCorp',
+      project_id: 'betacorp',
+    },
+  },
+  {
+    id: 'gmail-beta-client',
+    text: 'Email from BetaCorp (Maria Santos): "What is the status of our dashboard project? Board meeting Friday."',
+    metadata: {
+      source: 'gmail',
+      title: 'BetaCorp status inquiry',
+      type: 'email',
+      project: 'BetaCorp',
+      project_id: 'betacorp',
     },
   },
 ];

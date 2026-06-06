@@ -7,7 +7,18 @@ const dbUrl = process.env.DATABASE_URL ?? 'postgresql://cortex:cortex@localhost:
 console.log('🧠 Seeding Cortex brain (vectors + knowledge graph)…');
 
 for (const doc of MOCK_DOCUMENTS) {
-  await indexDocument(doc.id, doc.text, doc.metadata);
+  const project_id =
+    (doc.metadata.project_id as string | undefined) ??
+    (doc.metadata.project === 'Acme'
+      ? 'acme'
+      : doc.metadata.project === 'Global Dynamics'
+        ? 'global-dynamics'
+        : doc.metadata.project === 'BetaCorp'
+          ? 'betacorp'
+          : doc.metadata.project === 'Feature X'
+            ? 'acme'
+            : 'acme');
+  await indexDocument(doc.id, doc.text, { ...doc.metadata, project_id });
 }
 
 const graph = new GraphClient(dbUrl);
@@ -16,7 +27,7 @@ const acmeId = await graph.upsertNode({
   id: 'project:acme',
   label: 'Acme Mobile Launch',
   type: 'project',
-  properties: { status: 'blocked', blocker: 'Stripe API keys' },
+  properties: { status: 'blocked', blocker: 'Stripe API keys', project_id: 'acme' },
 });
 
 const milestoneId = await graph.upsertNode({
@@ -210,6 +221,51 @@ await graph.upsertEdge({
   toId: acmeId,
   type: 'mentioned_in',
   properties: { channel: '#acme-launch' },
+});
+
+const gdId = await graph.upsertNode({
+  id: 'project:global-dynamics',
+  label: 'Global Dynamics Rollout',
+  type: 'project',
+  properties: { status: 'blocked', blocker: 'SSO IdP credentials', project_id: 'global-dynamics' },
+});
+await graph.upsertNode({
+  id: 'ticket:gd-301',
+  label: 'GD-301 SSO integration',
+  type: 'ticket',
+  properties: { status: 'blocked', project_id: 'global-dynamics' },
+});
+await graph.upsertEdge({ fromId: gdId, toId: 'ticket:gd-301', type: 'has_ticket', properties: {} });
+
+const betaId = await graph.upsertNode({
+  id: 'project:betacorp',
+  label: 'BetaCorp Dashboard Refresh',
+  type: 'project',
+  properties: { status: 'on_track', due: '2026-06-18', project_id: 'betacorp' },
+});
+await graph.upsertNode({
+  id: 'ticket:beta-101',
+  label: 'BETA-101 Dashboard refresh',
+  type: 'ticket',
+  properties: { status: 'in_uat', project_id: 'betacorp' },
+});
+await graph.upsertNode({
+  id: 'person:maria',
+  label: 'Maria Santos (BetaCorp)',
+  type: 'person',
+  properties: { org: 'BetaCorp', project_id: 'betacorp' },
+});
+await graph.upsertEdge({
+  fromId: betaId,
+  toId: 'ticket:beta-101',
+  type: 'has_ticket',
+  properties: {},
+});
+await graph.upsertEdge({
+  fromId: 'ticket:beta-101',
+  toId: 'person:maria',
+  type: 'stakeholder',
+  properties: {},
 });
 
 await graph.query(

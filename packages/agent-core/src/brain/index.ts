@@ -1,4 +1,4 @@
-import { createLogger, llmClient } from '@cortex/shared';
+import { createLogger, llmClient, type LlmProvider } from '@cortex/shared';
 
 import { hybridRetrieveContext } from '../hybrid-retrieval';
 import type { SourceCitation } from '../retrieval';
@@ -40,7 +40,7 @@ function formatCitations(sources: SourceCitation[]): string {
  */
 export async function runBrain(
   query: string,
-  options?: { skipCache?: boolean },
+  options?: { skipCache?: boolean; projectIds?: string[]; provider?: LlmProvider },
 ): Promise<BrainResult> {
   const steps: string[] = [];
   const start = Date.now();
@@ -57,16 +57,20 @@ export async function runBrain(
     }
   }
 
+  const llmOpts = { provider: options?.provider, temperature: 0.3, maxTokens: 256 };
+
   steps.push('reasoning');
   const plan = await llmClient.complete(query, {
+    ...llmOpts,
     agentRole: 'reasoning',
-    temperature: 0.3,
-    maxTokens: 256,
   });
   log.debug({ plan: plan.slice(0, 120) }, 'reasoning complete');
 
   steps.push('retrieval');
-  const { context, sources, graphContext } = await hybridRetrieveContext(query, 8);
+  const { context, sources, graphContext } = await hybridRetrieveContext(query, 8, {
+    projectIds: options?.projectIds,
+    provider: options?.provider,
+  });
   log.debug({ docCount: sources.length, graph: !!graphContext }, 'retrieval complete');
 
   steps.push('action');
@@ -88,7 +92,7 @@ export async function runBrain(
     `Sub-questions to address:\n${plan}\n\nContext:\n${context || '(no documents)'}${
       graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
     }\n\nQuestion: ${query}`,
-    { agentRole: 'response', temperature: 0.45, maxTokens: 1024 },
+    { ...llmOpts, agentRole: 'response', temperature: 0.45, maxTokens: 1024 },
   );
 
   log.info({ steps, ms: Date.now() - start }, 'brain run complete');
