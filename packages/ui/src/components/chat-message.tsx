@@ -44,11 +44,11 @@ export function ChatMessageAvatar({
     user:
       theme === 'light'
         ? 'bg-[#111111] text-white'
-        : 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_0_16px_rgba(59,130,246,0.35)]',
+        : 'bg-[#2a2a2a] text-white border border-[#3a3a3a]',
     cortex:
       theme === 'light'
         ? 'border border-teal-200 bg-teal-50 text-teal-800'
-        : 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[0_0_16px_rgba(6,182,212,0.25)]',
+        : 'border border-[#14b8a6]/40 bg-[#14b8a6]/10 text-[#14b8a6]',
   };
   return (
     <div
@@ -83,8 +83,8 @@ export function ChatMessageContent({
         ? 'bg-[#111111] text-white'
         : 'border border-gray-200 bg-white text-gray-800 shadow-sm'
       : role === 'user'
-        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-[0_4px_24px_rgba(59,130,246,0.25)]'
-        : 'glass glass-hover text-[#cbd5e1] shadow-[0_0_20px_rgba(139,92,246,0.08)]',
+        ? 'bg-[#2a2a2a] text-white border border-[#3a3a3a]'
+        : 'border border-[#2a2a2a] bg-[#1a1a1a] text-[#d1d5db]',
     className,
   );
 
@@ -125,7 +125,7 @@ export function SourceCitations({
       <p
         className={cn(
           'font-mono text-[10px] uppercase tracking-wider',
-          variant === 'light' ? 'text-teal-700' : 'text-cyan-400/80',
+          variant === 'light' ? 'text-teal-700' : 'text-[#14b8a6]',
         )}
       >
         Sources
@@ -134,10 +134,13 @@ export function SourceCitations({
         {sources.map((source) => (
           <li
             key={source.id}
-            className={cn('text-xs', variant === 'light' ? 'text-gray-600' : 'text-[#94a3b8]')}
+            className={cn('text-xs', variant === 'light' ? 'text-gray-600' : 'text-zinc-500')}
           >
             <span
-              className={cn('font-medium', variant === 'light' ? 'text-teal-700' : 'text-cyan-300')}
+              className={cn(
+                'font-medium',
+                variant === 'light' ? 'text-teal-700' : 'text-[#14b8a6]',
+              )}
             >
               [{source.source}]
             </span>{' '}

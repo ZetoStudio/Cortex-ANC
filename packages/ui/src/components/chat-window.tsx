@@ -14,12 +14,6 @@ export function ChatWindow({ children, className, variant = 'dark' }: ChatWindow
   const isLight = variant === 'light';
   return (
     <div className={cn('relative min-h-0 flex-1', isLight ? 'bg-[#fafafa]' : 'mesh-bg', className)}>
-      {!isLight && (
-        <>
-          <div className="pointer-events-none absolute -left-20 top-10 size-64 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -right-16 bottom-20 size-56 rounded-full bg-purple-500/10 blur-3xl" />
-        </>
-      )}
       <StickToBottom
         className="relative flex h-full min-h-0 flex-1 overflow-y-auto"
         resize="smooth"

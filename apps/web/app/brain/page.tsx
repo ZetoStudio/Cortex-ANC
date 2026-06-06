@@ -81,7 +81,7 @@ export default function BrainPage() {
       title="Brain Chat"
       subtitle="Debug hybrid RAG (Groq)"
       badge={
-        <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600">
+        <span className="border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 font-mono text-xs text-zinc-400">
           Groq / LiteLLM
         </span>
       }
@@ -92,30 +92,30 @@ export default function BrainPage() {
           onSubmit={handleAsk}
           isLoading={loading}
           placeholder="Test retrieval: What blocks the Acme launch?"
-          variant="light"
+          variant="dark"
         />
       }
     >
-      <ChatWindow variant="light" className="h-full">
+      <ChatWindow variant="dark" className="h-full font-mono">
         {messages.map((m) => (
-          <ChatMessage key={m.id} role={m.role} variant="light">
+          <ChatMessage key={m.id} role={m.role} variant="dark">
             {m.role === 'assistant' && (
-              <ChatMessageAvatar fallback="B" variant="cortex" theme="light" />
+              <ChatMessageAvatar fallback="B" variant="cortex" theme="dark" />
             )}
             <div className="max-w-[90%]">
-              <ChatMessageContent markdown={m.role === 'assistant'} role={m.role} variant="light">
+              <ChatMessageContent markdown={m.role === 'assistant'} role={m.role} variant="dark">
                 {m.content}
               </ChatMessageContent>
               {m.steps && (
-                <p className="mt-1 font-mono text-[10px] text-gray-400">{m.steps.join(' → ')}</p>
+                <p className="mt-1 font-mono text-[10px] text-zinc-600">{m.steps.join(' → ')}</p>
               )}
-              {m.sources && <SourceCitations sources={m.sources} variant="light" />}
+              {m.sources && <SourceCitations sources={m.sources} variant="dark" />}
             </div>
-            {m.role === 'user' && <ChatMessageAvatar fallback="Dev" variant="user" theme="light" />}
+            {m.role === 'user' && <ChatMessageAvatar fallback="Dev" variant="user" theme="dark" />}
           </ChatMessage>
         ))}
         {loading && (
-          <div className="flex items-center gap-2 text-sm text-teal-700">
+          <div className="flex items-center gap-2 text-sm text-[#14b8a6]">
             <Spinner /> Running brain…
           </div>
         )}

@@ -42,40 +42,54 @@ export default function AdminPage() {
 
   return (
     <AppShell title="Admin Dashboard" subtitle="Platform health and activity">
-      <div className="h-full overflow-y-auto p-6">
+      <div className="h-full overflow-y-auto bg-[#0a0a0a] p-6">
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="paper-card h-24 animate-pulse bg-gray-50" />
+              <div key={i} className="dark-card h-24 animate-pulse bg-[#141414]" />
             ))}
           </div>
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {cards.map((s) => (
-                <div key={s.label} className="paper-card p-5">
-                  <p className="text-sm text-gray-500">{s.label}</p>
-                  <p className="mt-2 text-3xl font-semibold text-[#111111]">{s.value}</p>
+                <div key={s.label} className="dark-card p-5">
+                  <p className="text-sm text-zinc-500">{s.label}</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{s.value}</p>
                 </div>
               ))}
             </div>
 
-            <div className="paper-card mt-6 p-5">
-              <h2 className="text-sm font-medium text-[#111111]">Q&A activity (last 7 days)</h2>
+            <div className="dark-card mt-6 p-5">
+              <h2 className="text-sm font-medium text-white">Q&A activity (last 7 days)</h2>
               <div className="mt-4 h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats?.eventTimeline ?? []}>
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#a1a1aa" />
-                    <YAxis tick={{ fontSize: 11 }} stroke="#a1a1aa" allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 11, fill: '#71717a' }}
+                      stroke="#2a2a2a"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#71717a' }}
+                      stroke="#2a2a2a"
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: '#1a1a1a',
+                        border: '1px solid #2a2a2a',
+                        color: '#fff',
+                      }}
+                    />
+                    <Bar dataKey="count" fill="#14b8a6" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 text-sm text-gray-600 sm:grid-cols-2">
-              <div className="paper-card-inset p-4">
+            <div className="mt-4 grid gap-4 text-sm text-zinc-400 sm:grid-cols-2">
+              <div className="dark-card-inset p-4">
                 <p>Kafka: {stats?.kafka ?? '—'}</p>
                 <p className="mt-1">Nango: {stats?.nango ?? '—'}</p>
               </div>

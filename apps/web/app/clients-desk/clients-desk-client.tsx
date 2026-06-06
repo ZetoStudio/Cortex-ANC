@@ -107,8 +107,8 @@ export function ClientsDeskPage() {
       badge={<ProjectBadge projectIds={projectIds} role={role} />}
     >
       <div className="flex h-full">
-        <div className="w-80 shrink-0 overflow-y-auto border-r border-gray-200 bg-white p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-gray-400">Inbox</p>
+        <div className="w-80 shrink-0 overflow-y-auto border-r border-[#2a2a2a] bg-[#0f0f0f] p-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-600">Inbox</p>
           <ul className="space-y-2">
             {inbox.map((email) => (
               <li key={email.id}>
@@ -119,30 +119,30 @@ export function ClientsDeskPage() {
                     setDraft(null);
                     setApproved(false);
                   }}
-                  className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                  className={`w-full border p-3 text-left transition-colors duration-200 ${
                     selected?.id === email.id
-                      ? 'border-teal-300 bg-teal-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
+                      ? 'border-[#14b8a6]/40 bg-[#14b8a6]/10'
+                      : 'border-[#2a2a2a] bg-[#1a1a1a] hover:border-[#3a3a3a]'
                   }`}
                 >
-                  <p className="truncate text-sm font-medium text-[#111111]">{email.from}</p>
-                  <p className="truncate text-xs text-gray-600">{email.subject}</p>
-                  <p className="mt-1 text-[10px] text-gray-400">{email.receivedAt}</p>
+                  <p className="truncate text-sm font-medium text-white">{email.from}</p>
+                  <p className="truncate text-xs text-zinc-400">{email.subject}</p>
+                  <p className="mt-1 text-[10px] text-zinc-600">{email.receivedAt}</p>
                 </button>
               </li>
             ))}
           </ul>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col p-6">
+        <div className="flex min-w-0 flex-1 flex-col bg-[#0a0a0a] p-6">
           {selected ? (
             <>
-              <div className="paper-card p-5">
+              <div className="dark-card p-5">
                 <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 size-5 text-teal-600" />
+                  <Mail className="mt-0.5 size-5 text-[#14b8a6]" />
                   <div>
-                    <p className="font-medium text-[#111111]">{selected.subject}</p>
-                    <p className="text-sm text-gray-500">{selected.from}</p>
-                    <pre className="mt-4 whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-700">
+                    <p className="font-medium text-white">{selected.subject}</p>
+                    <p className="text-sm text-zinc-500">{selected.from}</p>
+                    <pre className="mt-4 whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-300">
                       {selected.body}
                     </pre>
                   </div>
@@ -160,16 +160,16 @@ export function ClientsDeskPage() {
                 </button>
               </div>
               {loading && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-teal-700">
+                <div className="mt-4 flex items-center gap-2 text-sm text-[#14b8a6]">
                   <Spinner /> Drafting reply…
                 </div>
               )}
               {draft && (
-                <div className="paper-card mt-6 p-5">
-                  <p className="text-xs font-medium uppercase tracking-wider text-teal-700">
+                <div className="dark-card mt-6 p-5">
+                  <p className="text-xs font-medium uppercase tracking-wider text-[#14b8a6]">
                     AI Draft
                   </p>
-                  <div className="prose prose-sm mt-3 max-w-none text-gray-800">
+                  <div className="prose prose-invert prose-sm mt-3 max-w-none text-zinc-300">
                     <Markdown>{draft}</Markdown>
                   </div>
                   {!approved && pendingApprovalId && (
@@ -178,12 +178,12 @@ export function ClientsDeskPage() {
                     </button>
                   )}
                   {approved && (
-                    <p className="mt-4 flex items-center gap-2 text-sm text-teal-700">
+                    <p className="mt-4 flex items-center gap-2 text-sm text-[#14b8a6]">
                       <CheckCircle2 className="size-4" /> Sent (approval workflow completed)
                     </p>
                   )}
                   {sources.length > 0 && (
-                    <ul className="mt-4 space-y-1 border-t border-gray-100 pt-4 text-xs text-gray-500">
+                    <ul className="mt-4 space-y-1 border-t border-[#2a2a2a] pt-4 text-xs text-zinc-500">
                       {sources.map((s) => (
                         <li key={s.id}>
                           [{s.source}] {s.title}
@@ -195,7 +195,7 @@ export function ClientsDeskPage() {
               )}
             </>
           ) : (
-            <p className="text-gray-500">No emails for your project scope.</p>
+            <p className="text-zinc-500">No emails for your project scope.</p>
           )}
         </div>
       </div>

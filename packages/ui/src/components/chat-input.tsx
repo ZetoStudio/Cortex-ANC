@@ -52,7 +52,7 @@ export function ChatInput({
       className={cn(
         variant === 'light'
           ? 'flex items-end gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-500/20'
-          : 'glass flex items-end gap-2 p-2 transition-all duration-200 focus-within:border-purple-500/40 focus-within:shadow-[0_0_24px_rgba(59,130,246,0.15)]',
+          : 'flex items-end gap-2 border border-[#2a2a2a] bg-[#1a1a1a] p-2 transition-all duration-200 focus-within:border-[#14b8a6]/50',
         disabled && 'opacity-60',
         className,
       )}

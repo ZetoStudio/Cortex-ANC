@@ -95,35 +95,35 @@ export function ExecutiveDeskPage() {
               ? "What's the status of my dashboard project?"
               : 'Who is working on the Acme launch and what is blocking it?'
           }
-          variant="light"
+          variant="dark"
         />
       }
     >
-      <ChatWindow variant="light" className="h-full">
+      <ChatWindow variant="dark" className="h-full">
         {messages.map((message) => (
-          <ChatMessage key={message.id} role={message.role} variant="light">
+          <ChatMessage key={message.id} role={message.role} variant="dark">
             {message.role === 'assistant' && (
-              <ChatMessageAvatar fallback="CX" variant="cortex" theme="light" />
+              <ChatMessageAvatar fallback="CX" variant="cortex" theme="dark" />
             )}
             <div className="max-w-[85%]">
               <ChatMessageContent
                 markdown={message.role === 'assistant'}
                 role={message.role}
-                variant="light"
+                variant="dark"
               >
                 {message.content}
               </ChatMessageContent>
               {message.sources && message.sources.length > 0 && (
-                <SourceCitations sources={message.sources} variant="light" />
+                <SourceCitations sources={message.sources} variant="dark" />
               )}
             </div>
             {message.role === 'user' && (
-              <ChatMessageAvatar fallback="You" variant="user" theme="light" />
+              <ChatMessageAvatar fallback="You" variant="user" theme="dark" />
             )}
           </ChatMessage>
         ))}
         {loading && (
-          <div className="flex items-center gap-2 text-sm text-teal-700">
+          <div className="flex items-center gap-2 text-sm text-[#14b8a6]">
             <Spinner />
             Cortex is thinking…
           </div>

@@ -32,17 +32,17 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#fafafa] px-4">
-      <div className="paper-card w-full max-w-md p-8 animate-fade-in">
-        <Link href="/" className="font-display text-2xl text-[#111111]">
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
+      <div className="dark-card w-full max-w-md p-8 animate-fade-in">
+        <Link href="/" className="font-display text-2xl text-white">
           Cortex
         </Link>
-        <h1 className="mt-6 text-xl font-semibold text-[#111111]">Sign in</h1>
-        <p className="mt-1 text-sm text-gray-500">Enter your email and password to continue.</p>
+        <h1 className="mt-6 text-xl font-semibold text-white">Sign in</h1>
+        <p className="mt-1 text-sm text-zinc-500">Enter your email and password to continue.</p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-sm font-medium text-zinc-400">
               Email
             </label>
             <input
@@ -52,12 +52,12 @@ export default function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="input-light mt-1.5"
+              className="input-dark mt-1.5"
               placeholder="you@cortex.anc"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-sm font-medium text-zinc-400">
               Password
             </label>
             <input
@@ -67,18 +67,21 @@ export default function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="input-light mt-1.5"
+              className="input-dark mt-1.5"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
-        <Link href="/" className="mt-8 block text-center text-sm text-gray-500 hover:text-teal-600">
+        <Link
+          href="/"
+          className="mt-8 block text-center text-sm text-zinc-500 transition-colors hover:text-[#14b8a6]"
+        >
           ← Back to home
         </Link>
       </div>
