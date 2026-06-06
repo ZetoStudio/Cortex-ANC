@@ -22,6 +22,8 @@
     "test:brain": "bun run scripts/test-brain.ts",
     "test:ollama": "bun run scripts/test-ollama.ts",
     "demo": "bash scripts/demo.sh",
+    "start:all": "bash scripts/start-all.sh start",
+    "start:all:stop": "bash scripts/start-all.sh stop",
     "db:up": "docker compose up -d postgres",
     "infra:up": "docker compose up -d",
     "db:init": "bash scripts/init-db.sh",
