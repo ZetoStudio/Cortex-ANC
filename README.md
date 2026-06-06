@@ -41,4 +41,5 @@ Not shown on the login page:
 
 **CEO** → Acme + Global Dynamics (internal). **Client** → BetaCorp only. **Admin** → all projects + admin tools.
 
-See [Executive guide](./docs/executive-guide.md) and [Client guide](./docs/client-guide.md) for role-specific walkthroughs.
+See [Executive guide](./docs/executive-guide.md) and [Client guide](./docs/client-guide.md) for role-specific walkthroughs.  
+**Seed reference:** [docs/seed-data.md](./docs/seed-data.md) — all demo companies, documents, and sample questions.
