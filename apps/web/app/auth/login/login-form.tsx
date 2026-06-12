@@ -17,7 +17,7 @@ export default function LoginForm({
 }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/onboarding';
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/auth/continue';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -35,7 +35,7 @@ export default function LoginForm({
           email: email.trim(),
           password,
           name: name.trim() || email.split('@')[0],
-          callbackURL: '/onboarding',
+          callbackURL: '/auth/continue',
         });
         if (res.error) {
           setError(res.error.message ?? 'Sign up failed');
@@ -52,7 +52,7 @@ export default function LoginForm({
           return;
         }
       }
-      router.push(mode === 'signup' ? '/onboarding' : callbackUrl);
+      router.push(mode === 'signup' ? '/onboarding' : (callbackUrl ?? '/auth/continue'));
     } catch {
       setError('Authentication failed');
     } finally {
@@ -77,7 +77,7 @@ export default function LoginForm({
     try {
       const res = await authClient.signIn.social({
         provider,
-        callbackURL: '/onboarding',
+        callbackURL: '/auth/continue',
       });
       if (res.error) {
         setError(res.error.message ?? `${provider} sign-in failed`);

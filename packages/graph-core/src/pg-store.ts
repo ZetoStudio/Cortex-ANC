@@ -55,7 +55,12 @@ export class PgVectorStore {
     );
   }
 
-  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
+  private async runVectorSearch(
+    query: string,
+    topK: number,
+    filters: SearchFilters | undefined,
+    sequentialScan: boolean,
+  ): Promise<SearchResult[]> {
     const embedding = await embedText(query);
     const vectorLiteral = `[${embedding.join(',')}]`;
 
@@ -84,27 +89,46 @@ export class PgVectorStore {
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const client = await this.pool.connect();
+    try {
+      if (sequentialScan) {
+        await client.query('SET LOCAL enable_indexscan = off');
+      }
+      const result = await client.query<{
+        id: string;
+        content: string;
+        metadata: DocumentMetadata;
+        score: number;
+      }>(
+        `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) AS score
+         FROM cortex_documents
+         ${whereClause}
+         ORDER BY embedding <=> $1::vector
+         LIMIT $2`,
+        params,
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        text: row.content,
+        metadata: row.metadata,
+        score: row.score,
+      }));
+    } finally {
+      client.release();
+    }
+  }
 
-    const result = await this.pool.query<{
-      id: string;
-      content: string;
-      metadata: DocumentMetadata;
-      score: number;
-    }>(
-      `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) AS score
-       FROM cortex_documents
-       ${whereClause}
-       ORDER BY embedding <=> $1::vector
-       LIMIT $2`,
-      params,
-    );
+  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
+    let results = await this.runVectorSearch(query, topK, filters, false);
+    // IVFFlat returns nothing on small tables until REINDEX — fall back to seq scan.
+    if (results.length === 0) {
+      results = await this.runVectorSearch(query, topK, filters, true);
+    }
+    return results;
+  }
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      text: row.content,
-      metadata: row.metadata,
-      score: row.score,
-    }));
+  async reindexEmbeddings(): Promise<void> {
+    await this.pool.query('REINDEX INDEX CONCURRENTLY IF EXISTS cortex_documents_embedding_idx');
   }
 
   async close(): Promise<void> {

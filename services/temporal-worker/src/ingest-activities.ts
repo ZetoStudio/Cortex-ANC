@@ -1,5 +1,10 @@
 import { indexDocument } from '@cortex/graph-core';
-import { getValidAccessToken, llmClient } from '@cortex/shared';
+import {
+  getValidAccessToken,
+  incrementIngestionProgress,
+  llmClient,
+  upsertIngestionProgress,
+} from '@cortex/shared';
 import { indexDocumentEs } from '@cortex/shared/graph/elasticsearch-client';
 import { upsertNeo4jNode } from '@cortex/shared/graph/neo4j-client';
 import pg from 'pg';
@@ -67,13 +72,28 @@ export async function ingestGmailActivity(input: { tenantId: string }): Promise<
   const token = await getValidAccessToken('google', input.tenantId);
   if (!token) return 0;
 
+  await upsertIngestionProgress(input.tenantId, 'google', {
+    status: 'running',
+    total_documents: 500,
+    processed_documents: 0,
+  });
+
   const listRes = await fetch(
     'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=500',
     { headers: { Authorization: `Bearer ${token}` } },
   );
-  if (!listRes.ok) return 0;
+  if (!listRes.ok) {
+    await upsertIngestionProgress(input.tenantId, 'google', { status: 'failed' });
+    return 0;
+  }
   const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
   let count = 0;
+  const total = list.messages?.length ?? 0;
+  await upsertIngestionProgress(input.tenantId, 'google', {
+    total_documents: total,
+    processed_documents: 0,
+    status: 'running',
+  });
 
   for (const msg of list.messages ?? []) {
     const detail = await fetch(
@@ -88,7 +108,7 @@ export async function ingestGmailActivity(input: { tenantId: string }): Promise<
     const subject =
       data.payload?.headers?.find((h) => h.name.toLowerCase() === 'subject')?.value ?? 'Email';
     const text = data.snippet ?? '';
-    count += await indexIngestDoc({
+    const indexed = await indexIngestDoc({
       tenantId: input.tenantId,
       docId: `${input.tenantId}:gmail:${msg.id}`,
       text,
@@ -97,8 +117,15 @@ export async function ingestGmailActivity(input: { tenantId: string }): Promise<
       type: 'email',
       url: `https://mail.google.com/mail/u/0/#inbox/${msg.id}`,
     });
+    count += indexed;
+    await incrementIngestionProgress(input.tenantId, 'google', indexed);
   }
 
+  await upsertIngestionProgress(input.tenantId, 'google', {
+    status: 'completed',
+    total_documents: total,
+    processed_documents: count,
+  });
   await updateOnboarding(input.tenantId, { gmail: count });
   return count;
 }
@@ -264,6 +291,12 @@ export async function ingestGitHubActivity(input: { tenantId: string }): Promise
   const token = await getValidAccessToken('github', input.tenantId);
   if (!token) return 0;
 
+  await upsertIngestionProgress(input.tenantId, 'github', {
+    status: 'running',
+    total_documents: 200,
+    processed_documents: 0,
+  });
+
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
@@ -271,7 +304,10 @@ export async function ingestGitHubActivity(input: { tenantId: string }): Promise
   const reposRes = await fetch('https://api.github.com/user/repos?per_page=30&sort=updated', {
     headers,
   });
-  if (!reposRes.ok) return 0;
+  if (!reposRes.ok) {
+    await upsertIngestionProgress(input.tenantId, 'github', { status: 'failed' });
+    return 0;
+  }
   const repos = (await reposRes.json()) as Array<{
     full_name: string;
     html_url: string;
@@ -394,6 +430,11 @@ export async function ingestGitHubActivity(input: { tenantId: string }): Promise
     }
   }
 
+  await upsertIngestionProgress(input.tenantId, 'github', {
+    status: 'completed',
+    total_documents: count,
+    processed_documents: count,
+  });
   await updateOnboarding(input.tenantId, { github: count });
   return count;
 }
@@ -434,6 +475,16 @@ export async function extractEntitiesActivity(input: {
 
 export async function markIngestCompleteActivity(tenantId: string): Promise<void> {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query('REINDEX INDEX IF EXISTS cortex_documents_embedding_idx');
+  } catch {
+    // non-fatal if index missing
+  }
+  await pool.query(
+    `UPDATE ingestion_progress SET status = 'completed', updated_at = NOW()
+     WHERE tenant_id = $1 AND status = 'running'`,
+    [tenantId],
+  );
   await pool.query(
     `UPDATE tenant_onboarding SET status = 'complete', step = 'done', updated_at = NOW() WHERE tenant_id = $1`,
     [tenantId],

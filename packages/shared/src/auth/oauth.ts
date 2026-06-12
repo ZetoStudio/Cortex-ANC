@@ -66,8 +66,9 @@ export function generateAuthUrl(
     return url.toString();
   }
 
-  const clientId = process.env.GITHUB_CLIENT_ID?.trim();
-  if (!clientId) throw new Error('GITHUB_CLIENT_ID not configured');
+  const clientId =
+    process.env.GITHUB_CONNECT_CLIENT_ID?.trim() || process.env.GITHUB_CLIENT_ID?.trim();
+  if (!clientId) throw new Error('GITHUB_CONNECT_CLIENT_ID not configured');
   const url = new URL('https://github.com/login/oauth/authorize');
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirect);
@@ -116,9 +117,11 @@ export async function exchangeCodeForTokens(
     };
   }
 
-  const clientId = process.env.GITHUB_CLIENT_ID?.trim();
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) throw new Error('GitHub OAuth not configured');
+  const clientId =
+    process.env.GITHUB_CONNECT_CLIENT_ID?.trim() || process.env.GITHUB_CLIENT_ID?.trim();
+  const clientSecret =
+    process.env.GITHUB_CONNECT_CLIENT_SECRET?.trim() || process.env.GITHUB_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) throw new Error('GitHub connector OAuth not configured');
 
   const res = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',

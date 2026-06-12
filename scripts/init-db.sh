@@ -96,6 +96,12 @@ if [ -f scripts/migrations/003_connected_accounts.sql ]; then
     -f scripts/migrations/003_connected_accounts.sql
 fi
 
+if [ -f scripts/migrations/004_ingestion_progress.sql ]; then
+  echo "→ Applying ingestion_progress migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/004_ingestion_progress.sql
+fi
+
 if [ -f scripts/migrate-auth.sh ]; then
   bash scripts/migrate-auth.sh || true
 fi

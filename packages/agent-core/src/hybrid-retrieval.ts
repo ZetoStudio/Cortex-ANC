@@ -1,5 +1,7 @@
 import { GraphClient, searchSimilar, type SearchResult } from '@cortex/graph-core';
 import type { LlmProvider } from '@cortex/shared';
+import { fetchLiveGmailContext } from '@cortex/shared';
+import { searchTenantEs } from '@cortex/shared/graph/elasticsearch-client';
 
 import { toCitations, type SourceCitation } from './retrieval';
 
@@ -57,10 +59,38 @@ export async function hybridRetrieveContext(
     ...(options?.projectIds?.length ? { projectIds: options.projectIds } : {}),
   };
   const hasFilters = Object.keys(filters).length > 0;
-  const vectorResults = rankResults(
+  const q = query.toLowerCase();
+  const sourceHint = /\b(mail|email|gmail|inbox)\b/.test(q)
+    ? 'gmail'
+    : /\b(drive|file|document)\b/.test(q)
+      ? 'drive'
+      : /\b(meeting|calendar|schedule)\b/.test(q)
+        ? 'calendar'
+        : /\b(github|repo|pull request|commit|issue)\b/.test(q)
+          ? 'github'
+          : undefined;
+
+  let vectorResults = rankResults(
     await searchSimilar(query, topK * 2, hasFilters ? filters : undefined),
     query,
-  ).slice(0, topK);
+  );
+
+  if (sourceHint && options?.tenantId) {
+    const focused = await searchSimilar(query, topK, { ...filters, source: sourceHint });
+    vectorResults = rankResults([...focused, ...vectorResults], query);
+  }
+
+  vectorResults = vectorResults.slice(0, topK);
+
+  if (vectorResults.length === 0 && options?.tenantId) {
+    const esHits = await searchTenantEs(options.tenantId, query, topK);
+    vectorResults = esHits.map((h) => ({
+      id: h.id,
+      text: h.excerpt,
+      metadata: { title: h.title, source: h.source, tenant_id: options.tenantId },
+      score: h.score,
+    }));
+  }
   const hints = extractEntityHints(query);
 
   const graphLines: string[] = [];
@@ -104,9 +134,25 @@ export async function hybridRetrieveContext(
     (r, i, arr) => arr.findIndex((x) => x.id === r.id) === i,
   );
   const sources = [...toCitations(dedupedVector), ...graphSources];
-  const vectorContext = vectorResults
+  let vectorContext = vectorResults
     .map((r, i) => `[${i + 1}] (${r.metadata.source}) ${r.metadata.title}: ${r.text}`)
     .join('\n\n');
+
+  const wantsMail = /\b(mail|email|gmail|inbox)\b/.test(q);
+  const hasGmail = vectorResults.some((r) => r.metadata.source === 'gmail');
+  if (wantsMail && !hasGmail && options?.tenantId) {
+    const liveGmail = await fetchLiveGmailContext(options.tenantId, 5);
+    if (liveGmail) {
+      vectorContext = [vectorContext, `Live Gmail:\n${liveGmail}`].filter(Boolean).join('\n\n');
+      sources.unshift({
+        id: 'live-gmail',
+        title: 'Latest Gmail (live)',
+        source: 'gmail',
+        excerpt: liveGmail.slice(0, 160),
+        score: 1,
+      });
+    }
+  }
 
   const graphContext = graphLines.length ? graphLines.join('\n') : '';
   const context = [vectorContext, graphContext ? `Knowledge graph:\n${graphContext}` : '']

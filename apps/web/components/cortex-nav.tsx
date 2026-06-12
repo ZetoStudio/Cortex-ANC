@@ -9,7 +9,7 @@ import { useCortexUser } from '@/hooks/use-cortex-user';
 
 const links = [
   { href: '/executive-desk', label: 'Executive' },
-  { href: '/clients-desk', label: 'Clients' },
+  { href: '/email-desk', label: 'Email' },
   { href: '/chat', label: 'Chat' },
   { href: '/approvals', label: 'Approvals' },
   { href: '/admin', label: 'Admin' },

@@ -43,17 +43,19 @@ export async function startHandleClientReplyWorkflow(input: {
   }
 }
 
-export function workflowIdForIngest(tenantId: string): string {
-  return `ingest-${tenantId}`;
+export function workflowIdForIngest(tenantId: string, provider: string): string {
+  const slug = provider.replace(/[^a-z0-9-]/gi, '-');
+  return `ingest-${tenantId}-${slug}`;
 }
 
 export async function startIngestInitialDataWorkflow(
   input: IngestInitialDataInput,
 ): Promise<string | null> {
   if (!process.env.TEMPORAL_ADDRESS) return null;
+  const provider = input.providers[0] ?? 'google-workspace';
+  const workflowId = workflowIdForIngest(input.tenantId, provider);
   try {
     const client = await getClient();
-    const workflowId = workflowIdForIngest(input.tenantId);
     await client.workflow.start('ingestInitialData', {
       taskQueue: TASK_QUEUE,
       workflowId,
@@ -62,30 +64,37 @@ export async function startIngestInitialDataWorkflow(
     return workflowId;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (message.includes('already started')) return workflowIdForIngest(input.tenantId);
+    if (message.includes('already started')) return workflowId;
     console.warn('[temporal] ingest start failed:', message);
     return null;
   }
 }
 
+const INGEST_PROVIDERS = ['google-workspace', 'github'];
+
 export async function getIngestWorkflowStatus(tenantId: string): Promise<IngestProgress | null> {
   if (!process.env.TEMPORAL_ADDRESS) return null;
   try {
     const client = await getClient();
-    const handle = client.workflow.getHandle(workflowIdForIngest(tenantId));
-    const desc = await handle.describe();
-    if (desc.status.name === 'COMPLETED') {
-      return { step: 'complete', documentsIndexed: 0, graphNodes: 0, percent: 100 };
+    let running = 0;
+    let completed = 0;
+    for (const provider of INGEST_PROVIDERS) {
+      try {
+        const handle = client.workflow.getHandle(workflowIdForIngest(tenantId, provider));
+        const desc = await handle.describe();
+        if (desc.status.name === 'COMPLETED') completed += 1;
+        if (desc.status.name === 'RUNNING') running += 1;
+      } catch {
+        // workflow not started for this provider
+      }
     }
-    if (desc.status.name === 'RUNNING') {
+    if (running > 0) {
       return { step: 'ingesting', documentsIndexed: 0, graphNodes: 0, percent: 50 };
     }
-    return {
-      step: desc.status.name.toLowerCase(),
-      documentsIndexed: 0,
-      graphNodes: 0,
-      percent: 10,
-    };
+    if (completed > 0) {
+      return { step: 'complete', documentsIndexed: 0, graphNodes: 0, percent: 100 };
+    }
+    return null;
   } catch {
     return null;
   }

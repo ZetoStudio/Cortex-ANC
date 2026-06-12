@@ -10,27 +10,13 @@ export type AuthUser = {
   isPlatformAdmin: boolean;
 };
 
-const ROLE_PERMISSIONS: Record<CortexRole, string[]> = {
-  admin: [
-    'desk:read',
-    'desk:write',
-    'approval:decide',
-    'connector:manage',
-    'admin:read',
-    'graph:read',
-    'brain:debug',
-  ],
-  ceo: ['desk:read', 'desk:write', 'approval:decide', 'admin:read', 'graph:read', 'brain:debug'],
-  client: ['desk:read', 'desk:write', 'graph:read'],
-};
-
-export function can(user: AuthUser | null, action: string): boolean {
-  if (!user) return false;
-  return (ROLE_PERMISSIONS[user.role] ?? []).includes(action);
+/** All signed-in users have full access while roles are disabled for the demo. */
+export function can(user: AuthUser | null, _action: string): boolean {
+  return user !== null;
 }
 
-export function canAccessAdmin(role: CortexRole): boolean {
-  return role === 'admin' || role === 'ceo';
+export function canAccessAdmin(_role: CortexRole): boolean {
+  return true;
 }
 
 export function sessionToAuthUser(session: {

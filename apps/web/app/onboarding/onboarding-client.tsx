@@ -1,5 +1,6 @@
 'use client';
 
+import { CheckCircle2, Circle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -14,12 +15,15 @@ type OnboardingStatus = {
   workflow?: { percent?: number };
 };
 
-const CONNECTORS = [
-  { id: 'google-workspace', connectAs: 'google', label: 'Google Workspace', active: true },
-  { id: 'github', connectAs: 'github', label: 'GitHub', active: true },
-  { id: 'notion', connectAs: 'notion', label: 'Notion', active: false },
-  { id: 'linear', connectAs: 'linear', label: 'Linear', active: false },
-  { id: 'discord', connectAs: 'discord', label: 'Discord', active: false },
+const ACTIVE_CONNECTORS = [
+  { id: 'google-workspace', connectAs: 'google', label: 'Google Workspace' },
+  { id: 'github', connectAs: 'github', label: 'GitHub' },
+] as const;
+
+const COMING_SOON = [
+  { id: 'notion', label: 'Notion' },
+  { id: 'linear', label: 'Linear' },
+  { id: 'discord', label: 'Discord' },
 ];
 
 export default function OnboardingClient() {
@@ -29,15 +33,11 @@ export default function OnboardingClient() {
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [connectError, setConnectError] = useState('');
+  const [optimisticConnected, setOptimisticConnected] = useState<Set<string>>(new Set());
   const handledRedirect = useRef<string | null>(null);
 
-  useEffect(() => {
-    const err = searchParams.get('error');
-    if (err) setConnectError(decodeURIComponent(err));
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!isLoaded || !tenantId) return;
+  function refreshStatus() {
+    if (!tenantId) return;
     const q = `?tenant_id=${tenantId}`;
     fetch(`/api/onboarding/status`)
       .then((r) => r.json())
@@ -47,16 +47,17 @@ export default function OnboardingClient() {
       .then((r) => r.json())
       .then((d: { status: ConnectorRow[] }) => setConnectors(d.status ?? []))
       .catch(() => null);
-    const t = setInterval(() => {
-      fetch('/api/onboarding/status')
-        .then((r) => r.json())
-        .then(setStatus)
-        .catch(() => null);
-      fetch(`/api/admin/connectors-status${q}`)
-        .then((r) => r.json())
-        .then((d: { status: ConnectorRow[] }) => setConnectors(d.status ?? []))
-        .catch(() => null);
-    }, 3000);
+  }
+
+  useEffect(() => {
+    const err = searchParams.get('error');
+    if (err) setConnectError(decodeURIComponent(err));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!isLoaded || !tenantId) return;
+    refreshStatus();
+    const t = setInterval(refreshStatus, 3000);
     return () => clearInterval(t);
   }, [isLoaded, tenantId]);
 
@@ -67,6 +68,8 @@ export default function OnboardingClient() {
     if (!key || !tenantId || handledRedirect.current === key) return;
     handledRedirect.current = key;
     setConnectError('');
+    setOptimisticConnected((prev) => new Set(prev).add(key));
+    refreshStatus();
 
     if (success) {
       router.replace('/onboarding');
@@ -88,18 +91,31 @@ export default function OnboardingClient() {
       .catch((e: Error) => setConnectError(e.message));
   }, [searchParams, tenantId, router]);
 
+  function isConnected(providerId: string): boolean {
+    const row = connectors.find((r) => r.provider === providerId);
+    return Boolean(row?.healthy || optimisticConnected.has(providerId));
+  }
+
   function connect(connectAs: string) {
     if (!tenantId) return;
     window.location.href = `/api/auth/connect/${encodeURIComponent(connectAs)}`;
   }
 
-  const percent =
-    status?.status === 'complete'
-      ? 100
-      : (status?.workflow?.percent ?? (status?.status === 'running' ? 50 : 10));
+  const googleConnected = isConnected('google-workspace');
+  const githubConnected = isConnected('github');
+  const bothConnected = googleConnected && githubConnected;
   const done = status?.status === 'complete';
-  const googleConnected = connectors.find((r) => r.provider === 'google-workspace')?.healthy;
-  const githubConnected = connectors.find((r) => r.provider === 'github')?.healthy;
+  const ingesting = status?.status === 'running';
+
+  const percent = done
+    ? 100
+    : bothConnected
+      ? ingesting
+        ? 70
+        : 50
+      : googleConnected || githubConnected
+        ? 35
+        : 10;
 
   if (!isLoaded) {
     return (
@@ -135,7 +151,14 @@ export default function OnboardingClient() {
           </p>
         )}
 
-        <div className="mt-10 h-2 overflow-hidden rounded-full bg-zinc-800">
+        {bothConnected && (
+          <div className="mt-6 flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            Both tools connected — you can enter the platform now.
+          </div>
+        )}
+
+        <div className="mt-8 h-2 overflow-hidden rounded-full bg-zinc-800">
           <div
             className="h-full bg-[#14b8a6] transition-all duration-500"
             style={{ width: `${percent}%` }}
@@ -143,63 +166,84 @@ export default function OnboardingClient() {
         </div>
         <p className="mt-2 text-sm text-zinc-500">
           {done
-            ? 'Ingestion complete'
-            : status?.status === 'running'
-              ? 'Ingesting your data…'
-              : `Step: ${status?.step ?? 'connect_tools'}`}
+            ? 'Ingestion complete — full context ready'
+            : ingesting
+              ? 'Ingesting your data in the background…'
+              : bothConnected
+                ? 'Ready to chat — indexing continues in the background'
+                : `Step: ${status?.step ?? 'connect_tools'}`}
         </p>
 
         <ul className="mt-10 space-y-3">
-          {CONNECTORS.map((c) => {
-            const row = connectors.find((r) => r.provider === c.id);
-            const connected = row?.healthy;
+          {ACTIVE_CONNECTORS.map((c) => {
+            const connected = isConnected(c.id);
             return (
               <li
                 key={c.id}
-                className={`flex items-center justify-between border px-4 py-4 ${
-                  c.active ? 'border-white/10 bg-black' : 'border-white/5 bg-zinc-950 opacity-50'
+                className={`flex items-center justify-between border px-4 py-4 transition-colors ${
+                  connected ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-white/10 bg-black'
                 }`}
               >
-                <div>
-                  <p className="font-medium">{c.label}</p>
-                  <p className="text-xs text-zinc-500">
-                    {connected
-                      ? 'Connected'
-                      : row?.reason
-                        ? row.reason
-                        : c.active
-                          ? 'Not connected'
-                          : 'Coming soon'}
-                  </p>
+                <div className="flex items-center gap-3">
+                  {connected ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0 text-zinc-600" aria-hidden />
+                  )}
+                  <div>
+                    <p className="font-medium">{c.label}</p>
+                    <p
+                      className={`text-xs ${connected ? 'font-medium text-emerald-400' : 'text-zinc-500'}`}
+                    >
+                      {connected ? 'Connected successfully' : 'Not connected'}
+                    </p>
+                  </div>
                 </div>
-                {c.active && (
-                  <button
-                    type="button"
-                    disabled={!c.active}
-                    onClick={() => connect(c.connectAs)}
-                    className="bg-[#14b8a6] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-black disabled:opacity-40"
-                  >
-                    {connected ? 'Reconnect' : 'Connect'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => connect(c.connectAs)}
+                  className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider ${
+                    connected
+                      ? 'border border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/30'
+                      : 'bg-[#14b8a6] text-black hover:bg-[#0d9488]'
+                  }`}
+                >
+                  {connected ? 'Reconnect' : 'Connect'}
+                </button>
               </li>
             );
           })}
+
+          {COMING_SOON.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center justify-between border border-white/5 bg-zinc-950 px-4 py-4 opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <Circle className="h-5 w-5 shrink-0 text-zinc-700" aria-hidden />
+                <div>
+                  <p className="font-medium">{c.label}</p>
+                  <p className="text-xs text-zinc-600">Coming soon</p>
+                </div>
+              </div>
+            </li>
+          ))}
         </ul>
 
-        {(googleConnected || githubConnected) && !done && (
-          <p className="mt-6 text-sm text-zinc-400">
-            Connected — ingestion runs in the background. This page updates automatically.
-          </p>
-        )}
-
-        {done && (
-          <Link
-            href="/executive-desk"
-            className="mt-12 inline-block bg-white px-8 py-3 text-sm font-semibold text-black"
-          >
-            Go to Executive Desk →
-          </Link>
+        {bothConnected && (
+          <div className="mt-12 space-y-3">
+            <Link
+              href="/executive-desk"
+              className="inline-block w-full bg-white px-8 py-4 text-center text-sm font-semibold text-black hover:bg-zinc-100"
+            >
+              Enter Executive Desk →
+            </Link>
+            {!done && (
+              <p className="text-center text-xs text-zinc-500">
+                You can ask questions now. Answers improve as ingestion finishes.
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
