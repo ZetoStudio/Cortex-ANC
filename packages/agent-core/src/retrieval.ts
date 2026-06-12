@@ -1,9 +1,4 @@
-import {
-  indexDocument,
-  searchSimilar,
-  MOCK_DOCUMENTS,
-  type SearchResult,
-} from '@cortex/graph-core';
+import { indexDocument, searchSimilar, type SearchResult } from '@cortex/graph-core';
 
 export type SourceCitation = {
   id: string;
@@ -11,17 +6,8 @@ export type SourceCitation = {
   source: string;
   excerpt: string;
   score: number;
+  url?: string;
 };
-
-let seeded = false;
-
-export async function ensureSeeded(): Promise<void> {
-  if (seeded) return;
-  for (const doc of MOCK_DOCUMENTS) {
-    await indexDocument(doc.id, doc.text, doc.metadata);
-  }
-  seeded = true;
-}
 
 export function toCitations(results: SearchResult[]): SourceCitation[] {
   return results.map((r) => ({
@@ -30,18 +16,27 @@ export function toCitations(results: SearchResult[]): SourceCitation[] {
     source: r.metadata.source,
     excerpt: r.text.slice(0, 160),
     score: r.score,
+    url: typeof r.metadata.url === 'string' ? r.metadata.url : undefined,
   }));
 }
 
 export async function retrieveContext(
   query: string,
   topK = 5,
+  options?: { tenantId?: string; projectIds?: string[] },
 ): Promise<{
   context: string;
   sources: SourceCitation[];
 }> {
-  await ensureSeeded();
-  const results = await searchSimilar(query, topK);
+  const filters = {
+    ...(options?.tenantId ? { tenantId: options.tenantId } : {}),
+    ...(options?.projectIds?.length ? { projectIds: options.projectIds } : {}),
+  };
+  const results = await searchSimilar(
+    query,
+    topK,
+    Object.keys(filters).length ? filters : undefined,
+  );
 
   if (results.length === 0) {
     return { context: '', sources: [] };
@@ -53,3 +48,5 @@ export async function retrieveContext(
 
   return { context, sources: toCitations(results) };
 }
+
+export { indexDocument };

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Wipe all tenant data — schema intact. Ready for real OAuth ingestion.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+DB="${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}"
+ES="${ELASTICSEARCH_URL:-http://localhost:9200}"
+NEO4J_HTTP="${NEO4J_HTTP_URL:-http://localhost:7474}"
+NEO4J_USER="${NEO4J_USER:-neo4j}"
+NEO4J_PASS="${NEO4J_PASSWORD:-cortexneo4j}"
+
+echo "→ Truncating Postgres tenant data…"
+psql "$DB" <<'SQL'
+TRUNCATE write_requests, audit_logs, connector_health, tenant_onboarding,
+  cortex_edges, cortex_nodes, cortex_documents, cortex_approvals,
+  cortex_agent_interactions, qa_logs, improvement_suggestions
+  RESTART IDENTITY CASCADE;
+TRUNCATE tenants RESTART IDENTITY CASCADE;
+-- Better Auth tables (if present)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user') THEN
+    TRUNCATE "session", "account", "verification", "user" CASCADE;
+  END IF;
+END $$;
+SQL
+
+echo "→ Deleting Elasticsearch cortex-* indices…"
+curl -sf "$ES/_cat/indices/cortex-*?h=index" 2>/dev/null | while read -r idx; do
+  [ -n "$idx" ] && curl -sf -X DELETE "$ES/$idx" >/dev/null && echo "   deleted $idx"
+done || echo "   (Elasticsearch unreachable — skip)"
+
+echo "→ Clearing Neo4j graph…"
+curl -sf -u "$NEO4J_USER:$NEO4J_PASS" \
+  -H 'Content-Type: application/json' \
+  -d '{"statements":[{"statement":"MATCH (n) DETACH DELETE n"}]}' \
+  "$NEO4J_HTTP/db/neo4j/tx/commit" >/dev/null 2>&1 || echo "   (Neo4j unreachable — skip)"
+
+echo "✅ Data wiped. Schema intact."

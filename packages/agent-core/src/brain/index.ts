@@ -40,7 +40,12 @@ function formatCitations(sources: SourceCitation[]): string {
  */
 export async function runBrain(
   query: string,
-  options?: { skipCache?: boolean; projectIds?: string[]; provider?: LlmProvider },
+  options?: {
+    skipCache?: boolean;
+    tenantId?: string;
+    projectIds?: string[];
+    provider?: LlmProvider;
+  },
 ): Promise<BrainResult> {
   const steps: string[] = [];
   const start = Date.now();
@@ -68,6 +73,7 @@ export async function runBrain(
 
   steps.push('retrieval');
   const { context, sources, graphContext } = await hybridRetrieveContext(query, 8, {
+    tenantId: options?.tenantId,
     projectIds: options?.projectIds,
     provider: options?.provider,
   });

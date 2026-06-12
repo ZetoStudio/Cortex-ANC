@@ -5,6 +5,7 @@ import { runBrain, type BrainResult } from './brain';
 export type OrchestratorResult = BrainResult;
 
 export type OrchestratorOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
 };

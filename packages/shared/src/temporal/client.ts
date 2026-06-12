@@ -1,6 +1,6 @@
 import { Client, Connection } from '@temporalio/client';
 
-import type { ApprovalDecision } from './types';
+import type { ApprovalDecision, IngestInitialDataInput, IngestProgress } from './types';
 
 const TASK_QUEUE = 'cortex-approvals';
 
@@ -39,6 +39,54 @@ export async function startHandleClientReplyWorkflow(input: {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes('already started')) return workflowIdForApproval(input.approvalId);
     console.warn('[temporal] start workflow failed:', message);
+    return null;
+  }
+}
+
+export function workflowIdForIngest(tenantId: string): string {
+  return `ingest-${tenantId}`;
+}
+
+export async function startIngestInitialDataWorkflow(
+  input: IngestInitialDataInput,
+): Promise<string | null> {
+  if (!process.env.TEMPORAL_ADDRESS) return null;
+  try {
+    const client = await getClient();
+    const workflowId = workflowIdForIngest(input.tenantId);
+    await client.workflow.start('ingestInitialData', {
+      taskQueue: TASK_QUEUE,
+      workflowId,
+      args: [input],
+    });
+    return workflowId;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('already started')) return workflowIdForIngest(input.tenantId);
+    console.warn('[temporal] ingest start failed:', message);
+    return null;
+  }
+}
+
+export async function getIngestWorkflowStatus(tenantId: string): Promise<IngestProgress | null> {
+  if (!process.env.TEMPORAL_ADDRESS) return null;
+  try {
+    const client = await getClient();
+    const handle = client.workflow.getHandle(workflowIdForIngest(tenantId));
+    const desc = await handle.describe();
+    if (desc.status.name === 'COMPLETED') {
+      return { step: 'complete', documentsIndexed: 0, graphNodes: 0, percent: 100 };
+    }
+    if (desc.status.name === 'RUNNING') {
+      return { step: 'ingesting', documentsIndexed: 0, graphNodes: 0, percent: 50 };
+    }
+    return {
+      step: desc.status.name.toLowerCase(),
+      documentsIndexed: 0,
+      graphNodes: 0,
+      percent: 10,
+    };
+  } catch {
     return null;
   }
 }

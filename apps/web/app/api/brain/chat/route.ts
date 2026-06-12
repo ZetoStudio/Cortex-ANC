@@ -16,6 +16,7 @@ export const POST = withAuth(
       }
 
       const result = await askQuestion(body.prompt.trim(), {
+        tenantId: user.tenantId,
         projectIds: user.projectIds,
         provider: body.provider,
       });

@@ -12,6 +12,7 @@ export type AskQuestionResult = {
 };
 
 export type AskOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
 };

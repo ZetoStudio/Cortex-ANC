@@ -7,3 +7,11 @@ export * from './logger';
 // Kafka: import from '@cortex/shared/kafka' in Node services only (not Next.js)
 export * from './events';
 export * from './redis-cache';
+export * from './tenant/types';
+export * from './db/tenant-pool';
+export * from './audit';
+export * from './connectors/oauth';
+export * from './auth/oauth';
+export * from './auth/connected-accounts';
+export * from './crypto/token-encryption';
+export * from './load-root-env';

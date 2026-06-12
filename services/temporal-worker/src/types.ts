@@ -7,3 +7,8 @@ export type HandleClientReplyInput = {
 export type ApprovalDecision = {
   approved: boolean;
 };
+
+export type IngestInitialDataInput = {
+  tenantId: string;
+  providers: string[];
+};

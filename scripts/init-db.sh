@@ -78,4 +78,26 @@ CREATE TABLE IF NOT EXISTS improvement_suggestions (
 );
 SQL
 
-echo "✅ cortex_documents table ready"
+if [ -f scripts/migrations/001_multi_tenancy.sql ]; then
+  echo "→ Applying multi-tenancy migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/001_multi_tenancy.sql
+fi
+
+if [ -f scripts/migrations/002_connector_credentials.sql ]; then
+  echo "→ Applying connector credentials migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/002_connector_credentials.sql
+fi
+
+if [ -f scripts/migrations/003_connected_accounts.sql ]; then
+  echo "→ Applying connected_accounts migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/003_connected_accounts.sql
+fi
+
+if [ -f scripts/migrate-auth.sh ]; then
+  bash scripts/migrate-auth.sh || true
+fi
+
+echo "✅ Cortex schema ready (run: bun run db:wipe to clear data)"

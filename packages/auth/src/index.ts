@@ -1,23 +1,13 @@
-import type { DemoRole } from './demo-users';
-
-export {
-  DEMO_USERS,
-  findDemoUser,
-  getDemoUserByRole,
-  projectIdsForRole,
-  canAccessAdmin,
-  type DemoRole,
-  type DemoUser,
-} from './demo-users';
-
-export type CortexRole = DemoRole;
+export type CortexRole = 'admin' | 'ceo' | 'client';
 
 export type AuthUser = {
   id: string;
   email: string;
   name: string;
   role: CortexRole;
+  tenantId: string;
   projectIds: string[];
+  isPlatformAdmin: boolean;
 };
 
 const ROLE_PERMISSIONS: Record<CortexRole, string[]> = {
@@ -39,12 +29,29 @@ export function can(user: AuthUser | null, action: string): boolean {
   return (ROLE_PERMISSIONS[user.role] ?? []).includes(action);
 }
 
-export function toAuthUser(demo: {
-  id: string;
-  email: string;
-  name: string;
-  role: CortexRole;
-  projectIds: string[];
-}): AuthUser {
-  return demo;
+export function canAccessAdmin(role: CortexRole): boolean {
+  return role === 'admin' || role === 'ceo';
+}
+
+export function sessionToAuthUser(session: {
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+    tenantId?: string | null;
+    role?: string | null;
+  };
+}): AuthUser | null {
+  const u = session.user;
+  if (!u.email || !u.tenantId) return null;
+  const role = (u.role ?? 'admin') as CortexRole;
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name ?? u.email,
+    role,
+    tenantId: u.tenantId,
+    projectIds: [],
+    isPlatformAdmin: role === 'admin',
+  };
 }

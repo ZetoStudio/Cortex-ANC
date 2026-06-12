@@ -26,11 +26,17 @@ export async function createConsumer(groupId: string): Promise<Consumer> {
   return consumer;
 }
 
-export async function publishEvent(topic: string, payload: unknown): Promise<void> {
+export async function publishEvent(
+  topic: string,
+  payload: unknown,
+  options?: { tenantId?: string },
+): Promise<void> {
   const producer = await createProducer();
+  const headers: Record<string, string> = {};
+  if (options?.tenantId) headers.tenant_id = options.tenantId;
   await producer.send({
     topic,
-    messages: [{ value: JSON.stringify(payload) }],
+    messages: [{ value: JSON.stringify(payload), headers }],
   });
   await producer.disconnect();
 }

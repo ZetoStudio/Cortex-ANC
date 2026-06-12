@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { signOut } from 'next-auth/react';
+import { authClient } from '@/lib/auth-client';
 import { Brain, LayoutDashboard, LogOut, Mail, Settings, Shield } from 'lucide-react';
 
 import type { CortexRole } from '@cortex/auth';
@@ -75,7 +75,15 @@ export function AppShell({
           <p className="mt-2 truncate text-xs text-zinc-600">{user?.email}</p>
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: '/' })}
+            onClick={() =>
+              authClient.signOut({
+                fetchOptions: {
+                  onSuccess: () => {
+                    window.location.href = '/auth/login';
+                  },
+                },
+              })
+            }
             className="mt-3 flex w-full items-center gap-2 px-2 py-1.5 text-xs text-zinc-500 transition-colors duration-200 hover:text-white"
           >
             <LogOut className="size-3.5" />

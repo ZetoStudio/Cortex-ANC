@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@cortex/agent-core": "workspace:*",
+    "@cortex/graph-core": "workspace:*",
+    "@cortex/shared": "workspace:*",
+    "pg": "^8.21.0",
     "@temporalio/activity": "^1.11.7",
     "@temporalio/client": "^1.11.7",
     "@temporalio/worker": "^1.11.7",

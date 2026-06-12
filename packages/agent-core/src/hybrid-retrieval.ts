@@ -1,9 +1,10 @@
 import { GraphClient, searchSimilar, type SearchResult } from '@cortex/graph-core';
 import type { LlmProvider } from '@cortex/shared';
 
-import { ensureSeeded, toCitations, type SourceCitation } from './retrieval';
+import { toCitations, type SourceCitation } from './retrieval';
 
 export type RetrieveOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
 };
@@ -51,12 +52,15 @@ export async function hybridRetrieveContext(
   topK = 5,
   options?: RetrieveOptions,
 ): Promise<{ context: string; sources: SourceCitation[]; graphContext: string }> {
-  await ensureSeeded();
-  const filters = options?.projectIds?.length ? { projectIds: options.projectIds } : undefined;
-  const vectorResults = rankResults(await searchSimilar(query, topK * 2, filters), query).slice(
-    0,
-    topK,
-  );
+  const filters = {
+    ...(options?.tenantId ? { tenantId: options.tenantId } : {}),
+    ...(options?.projectIds?.length ? { projectIds: options.projectIds } : {}),
+  };
+  const hasFilters = Object.keys(filters).length > 0;
+  const vectorResults = rankResults(
+    await searchSimilar(query, topK * 2, hasFilters ? filters : undefined),
+    query,
+  ).slice(0, topK);
   const hints = extractEntityHints(query);
 
   const graphLines: string[] = [];

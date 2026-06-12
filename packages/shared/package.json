@@ -21,6 +21,18 @@
     "./temporal/types": {
       "types": "./dist/temporal/types.d.ts",
       "import": "./dist/temporal/types.js"
+    },
+    "./graph/neo4j-client": {
+      "types": "./dist/graph/neo4j-client.d.ts",
+      "import": "./dist/graph/neo4j-client.js"
+    },
+    "./graph/elasticsearch-client": {
+      "types": "./dist/graph/elasticsearch-client.d.ts",
+      "import": "./dist/graph/elasticsearch-client.js"
+    },
+    "./auth/oauth": {
+      "types": "./dist/auth/oauth.d.ts",
+      "import": "./dist/auth/oauth.js"
     }
   },
   "scripts": {
@@ -32,6 +44,8 @@
   "dependencies": {
     "@temporalio/client": "^1.11.7",
     "kafkajs": "^2.2.4",
+    "neo4j-driver": "^5.28.1",
+    "pg": "^8.21.0",
     "pino": "^9.6.0"
   },
   "devDependencies": {

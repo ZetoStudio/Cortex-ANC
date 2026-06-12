@@ -1,27 +1,40 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import { sessionToAuthUser, type AuthUser } from '@cortex/auth';
 
-import type { CortexRole } from '@cortex/auth';
+import { authClient } from '@/lib/auth-client';
 
 export function useCortexUser() {
-  const { data: session, status } = useSession();
-  const user = session?.user as
-    | { email?: string; name?: string; role?: CortexRole; projectIds?: string[] }
+  const { data: session, isPending } = authClient.useSession();
+  const u = session?.user as
+    | {
+        id: string;
+        email: string;
+        name?: string | null;
+        tenantId?: string | null;
+        role?: string | null;
+      }
     | undefined;
 
+  const user: AuthUser | null =
+    session && u
+      ? sessionToAuthUser({
+          user: {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            tenantId: u.tenantId,
+            role: u.role,
+          },
+        })
+      : null;
+
   return {
-    user: user?.email
-      ? {
-          email: user.email,
-          name: user.name ?? user.email,
-          role: user.role ?? ('client' as CortexRole),
-          projectIds: user.projectIds ?? [],
-        }
-      : null,
+    user,
     role: user?.role ?? null,
     projectIds: user?.projectIds ?? [],
-    isLoading: status === 'loading',
-    isAuthenticated: status === 'authenticated',
+    tenantId: user?.tenantId ?? null,
+    isLoaded: !isPending,
+    isSignedIn: !!user,
   };
 }

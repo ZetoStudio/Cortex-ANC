@@ -41,15 +41,17 @@ export class PgVectorStore {
   async indexDocument(id: string, text: string, metadata: DocumentMetadata): Promise<void> {
     const embedding = await embedText(text);
     const vectorLiteral = `[${embedding.join(',')}]`;
+    const tenantId = typeof metadata.tenant_id === 'string' ? metadata.tenant_id : null;
 
     await this.pool.query(
-      `INSERT INTO cortex_documents (id, content, metadata, embedding)
-       VALUES ($1, $2, $3, $4::vector)
+      `INSERT INTO cortex_documents (id, content, metadata, embedding, tenant_id)
+       VALUES ($1, $2, $3, $4::vector, $5)
        ON CONFLICT (id) DO UPDATE SET
          content = EXCLUDED.content,
          metadata = EXCLUDED.metadata,
-         embedding = EXCLUDED.embedding`,
-      [id, text, metadata, vectorLiteral],
+         embedding = EXCLUDED.embedding,
+         tenant_id = EXCLUDED.tenant_id`,
+      [id, text, metadata, vectorLiteral, tenantId],
     );
   }
 
@@ -75,6 +77,10 @@ export class PgVectorStore {
     if (filters?.type) {
       params.push(filters.type);
       conditions.push(`metadata->>'type' = $${params.length}`);
+    }
+    if (filters?.tenantId) {
+      params.push(filters.tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

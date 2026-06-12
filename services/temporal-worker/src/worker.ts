@@ -1,9 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadRootEnv } from '@cortex/shared';
 import { NativeConnection, Worker } from '@temporalio/worker';
 
+loadRootEnv(import.meta.url);
+
 import * as activities from './activities';
+import * as ingestActivities from './ingest-activities';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +20,7 @@ async function run(): Promise<void> {
     namespace: 'default',
     taskQueue: 'cortex-approvals',
     workflowsPath: path.join(__dirname, 'workflows.ts'),
-    activities,
+    activities: { ...activities, ...ingestActivities },
   });
 
   console.log(`[temporal-worker] listening on ${address} (queue: cortex-approvals)`);
