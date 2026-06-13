@@ -39,6 +39,7 @@ export async function ingestInitialData(input: IngestInitialDataInput): Promise<
   const googleProviders = ['google-workspace', 'gmail', 'google'];
   const wantsGoogle = input.providers.some((p) => googleProviders.includes(p));
   const wantsGitHub = input.providers.includes('github');
+  const wantsNotion = input.providers.includes('notion');
 
   if (wantsGoogle) {
     total += await ingestActivities.ingestGmailActivity({ tenantId: input.tenantId });
@@ -49,6 +50,9 @@ export async function ingestInitialData(input: IngestInitialDataInput): Promise<
   }
   if (wantsGitHub) {
     total += await ingestActivities.ingestGitHubActivity({ tenantId: input.tenantId });
+  }
+  if (wantsNotion) {
+    total += await ingestActivities.ingestNotionActivity({ tenantId: input.tenantId });
   }
 
   await ingestActivities.extractEntitiesActivity({

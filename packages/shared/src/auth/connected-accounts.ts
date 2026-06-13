@@ -1,7 +1,7 @@
 import type { TenantContext } from '../tenant/types';
 import { queryWithTenant } from '../db/tenant-pool';
 import { decryptToken, encryptToken } from '../crypto/token-encryption';
-import { type OAuthProvider, type OAuthTokens, refreshAccessToken } from './oauth';
+import { type AccountProvider, type OAuthTokens, refreshAccessToken } from './oauth';
 
 export type StoredAccountToken = OAuthTokens;
 
@@ -19,7 +19,7 @@ function tenantCtx(tenantId: string): TenantContext {
 
 export async function saveConnectedAccount(
   tenantId: string,
-  provider: OAuthProvider,
+  provider: AccountProvider,
   token: OAuthTokens,
 ): Promise<void> {
   const ctx = tenantCtx(tenantId);
@@ -46,7 +46,7 @@ export async function saveConnectedAccount(
 
 export async function getConnectedAccount(
   tenantId: string,
-  provider: OAuthProvider,
+  provider: AccountProvider,
 ): Promise<StoredAccountToken | null> {
   const ctx = tenantCtx(tenantId);
   const r = await queryWithTenant<{
@@ -72,11 +72,13 @@ export async function getConnectedAccount(
 
 /** Returns a valid access token, refreshing Google tokens when expired. */
 export async function getValidAccessToken(
-  provider: OAuthProvider,
+  provider: AccountProvider,
   tenantId: string,
 ): Promise<string | null> {
   const stored = await getConnectedAccount(tenantId, provider);
   if (!stored) return null;
+
+  if (provider === 'notion') return stored.accessToken;
 
   const expiresSoon = stored.expiresAt && stored.expiresAt.getTime() < Date.now() + 60_000;
   if (!expiresSoon) return stored.accessToken;

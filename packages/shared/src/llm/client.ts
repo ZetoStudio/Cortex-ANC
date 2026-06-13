@@ -2,7 +2,7 @@ import { httpClient } from '../http/client';
 
 import { BRAIN_PROMPTS, type AgentRole } from './prompts';
 
-export type LlmProvider = 'groq' | 'ollama';
+export type LlmProvider = 'groq' | 'gemini' | 'ollama';
 
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -18,11 +18,6 @@ export interface LlmOptions {
   agentRole?: AgentRole;
 }
 
-// Ollama disabled for demo — kept for future re-enable
-// function resolveProvider(_explicit?: LlmProvider): LlmProvider {
-//   return 'groq';
-// }
-
 function buildMessages(prompt: string, options: LlmOptions): LlmMessage[] {
   const system =
     options.systemPrompt ?? (options.agentRole ? BRAIN_PROMPTS[options.agentRole] : undefined);
@@ -35,6 +30,22 @@ function buildMessages(prompt: string, options: LlmOptions): LlmMessage[] {
 function litellmBase(): string | null {
   const url = (process.env.LITELLM_URL ?? 'http://localhost:4000').replace(/\/$/, '');
   return url || null;
+}
+
+function primaryLiteLLMModel(): string {
+  return process.env.LITELLM_MODEL ?? 'cortex-groq';
+}
+
+function fallbackLiteLLMModel(): string {
+  return process.env.LITELLM_FALLBACK_MODEL ?? 'cortex-gemini';
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('429') ||
+    /rate.?limit|ratelimit|throttl|resource.?exhausted|tokens per day/i.test(msg)
+  );
 }
 
 async function callLiteLLM(
@@ -50,27 +61,53 @@ async function callLiteLLM(
   }>(
     `${base}/v1/chat/completions`,
     {
-      model: model.startsWith('cortex-') ? model : 'cortex-groq',
+      model,
       messages,
       temperature,
       max_tokens: maxTokens,
     },
-    { headers: { Authorization: `Bearer ${key}` } },
+    { headers: { Authorization: `Bearer ${key}` }, timeoutMs: 90_000 },
   );
   return response.data.choices[0]?.message.content ?? '';
 }
 
-async function callGroq(
+async function callLiteLLMWithFallback(
+  messages: LlmMessage[],
+  temperature: number,
+  maxTokens?: number,
+): Promise<string> {
+  const primary = primaryLiteLLMModel();
+  const fallback = fallbackLiteLLMModel();
+  const hasGemini = !!process.env.GEMINI_API_KEY?.trim();
+  const models = hasGemini && fallback !== primary ? [primary, fallback] : [primary];
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]!;
+    try {
+      return await callLiteLLM(messages, model, temperature, maxTokens);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const hasNext = i < models.length - 1;
+      if (hasNext && isRateLimitError(err)) {
+        console.warn(`[llm] ${model} rate limited — falling back to ${models[i + 1]}`);
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError ?? new Error('LLM request failed');
+}
+
+async function callGroqDirect(
   messages: LlmMessage[],
   model: string,
   temperature: number,
   maxTokens?: number,
 ): Promise<string> {
-  if (litellmBase()) return callLiteLLM(messages, 'cortex-groq', temperature, maxTokens);
-
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    throw new Error('GROQ_API_KEY is required when using Groq provider');
+    throw new Error('GROQ_API_KEY is required when LiteLLM is not configured');
   }
 
   let lastError: Error | null = null;
@@ -100,25 +137,22 @@ async function callGroq(
   throw lastError ?? new Error('Groq request failed');
 }
 
-// Ollama disabled for demo
-// async function callOllama(...) { ... }
-
 async function llmChat(messages: LlmMessage[], options: LlmOptions = {}): Promise<string> {
   const temperature = options.temperature ?? 0.7;
-  const model = options.model ?? process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
-  return callGroq(messages, model, temperature, options.maxTokens);
+  const groqModel = options.model ?? process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
 
-  // Ollama path disabled for demo:
-  // if (resolveProvider(options.provider) === 'ollama') {
-  //   return callOllama(messages, options.model ?? 'llama3:8b', temperature);
-  // }
+  if (litellmBase()) {
+    return callLiteLLMWithFallback(messages, temperature, options.maxTokens);
+  }
+
+  return callGroqDirect(messages, groqModel, temperature, options.maxTokens);
 }
 
 export async function llmComplete(prompt: string, options: LlmOptions = {}): Promise<string> {
   return llmChat(buildMessages(prompt, options), options);
 }
 
-/** Cheap Groq pass for entity extraction / monitoring (Ollama disabled). */
+/** Lightweight LLM pass for entity extraction during ingestion. */
 export async function llmCompleteLocal(prompt: string, temperature = 0): Promise<string> {
   return llmChat([{ role: 'user', content: prompt }], {
     temperature,

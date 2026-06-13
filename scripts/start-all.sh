@@ -66,6 +66,12 @@ start_web() {
   fi
   rm -f apps/web/.next/dev/lock 2>/dev/null || true
   log "Starting Next.js web on :3000..."
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
   (cd apps/web && nohup bun run dev >>"../../$LOG_DIR/web.log" 2>&1 &)
   sleep 2
   # PID of next dev (more reliable than nohup subshell)

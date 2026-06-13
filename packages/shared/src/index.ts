@@ -17,3 +17,4 @@ export * from './crypto/token-encryption';
 export * from './load-root-env';
 export * from './ingestion/progress';
 export * from './gmail/live';
+export * from './github/live';

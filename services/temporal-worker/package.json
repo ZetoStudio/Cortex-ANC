@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@cortex/agent-core": "workspace:*",
+    "@cortex/integration-core": "workspace:*",
     "@cortex/graph-core": "workspace:*",
     "@cortex/shared": "workspace:*",
     "pg": "^8.21.0",

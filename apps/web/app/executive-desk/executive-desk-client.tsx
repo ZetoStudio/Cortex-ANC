@@ -43,10 +43,15 @@ export function ExecutiveDeskPage() {
     setLoading(true);
 
     try {
+      const history = messages
+        .filter((m) => m.id !== 'welcome')
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       const response = await fetch('/api/executive-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, history }),
       });
       const data = (await response.json()) as {
         answer?: string;

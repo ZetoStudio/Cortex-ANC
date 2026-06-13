@@ -139,6 +139,7 @@ services:
       - '4000:4000'
     environment:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     command: ['--port', '4000', '--config', '/app/config.yaml']
     volumes:
       - ./infra/litellm/config.yaml:/app/config.yaml:ro

@@ -11,6 +11,8 @@ const GITHUB_SCOPES = ['repo', 'read:org', 'read:user'];
 
 export type OAuthProvider = 'google' | 'github';
 
+export type AccountProvider = OAuthProvider | 'notion';
+
 export type OAuthTokens = {
   accessToken: string;
   refreshToken?: string;

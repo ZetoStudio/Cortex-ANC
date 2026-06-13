@@ -29,6 +29,7 @@
         "@base-ui/react": "^1.5.0",
         "@cortex/agent-core": "workspace:*",
         "@cortex/auth": "workspace:*",
+        "@cortex/integration-core": "workspace:*",
         "@cortex/shared": "workspace:*",
         "@cortex/ui": "workspace:*",
         "@opentelemetry/api": "^1.9.1",
@@ -212,6 +213,7 @@
       "dependencies": {
         "@cortex/agent-core": "workspace:*",
         "@cortex/graph-core": "workspace:*",
+        "@cortex/integration-core": "workspace:*",
         "@cortex/shared": "workspace:*",
         "@temporalio/activity": "^1.11.7",
         "@temporalio/client": "^1.11.7",

@@ -8,6 +8,7 @@ export type OrchestratorOptions = {
   tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
+  history?: Array<{ role: string; content: string }>;
 };
 
 /** LangGraph-style pipeline — delegates to Cortex Brain. */

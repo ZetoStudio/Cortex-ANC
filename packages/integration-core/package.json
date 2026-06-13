@@ -12,7 +12,11 @@
     },
     "./framework": "./src/framework/index.ts",
     "./common": "./src/common/index.ts",
-    "./shared-stubs": "./src/shared-stubs/index.ts"
+    "./shared-stubs": "./src/shared-stubs/index.ts",
+    "./notion": {
+      "types": "./src/connectors/notion/client.ts",
+      "import": "./src/connectors/notion/client.ts"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noCheck",

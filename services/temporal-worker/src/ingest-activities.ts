@@ -1,5 +1,12 @@
 import { indexDocument } from '@cortex/graph-core';
 import {
+  listDatabases,
+  pageTitleFromProperties,
+  queryDatabase,
+  searchAllPages,
+  getPageContent,
+} from '@cortex/integration-core/notion';
+import {
   getValidAccessToken,
   incrementIngestionProgress,
   llmClient,
@@ -12,12 +19,31 @@ import pg from 'pg';
 const GOOGLE_PROVIDERS = ['google-workspace', 'gmail', 'google'];
 const GITHUB_PROVIDERS = ['github'];
 
+function sanitizeText(text: string): string {
+  return text.replace(/\0/g, '').trim();
+}
+
 function chunkText(text: string, maxChars = 2000): string[] {
+  const clean = sanitizeText(text);
   const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += maxChars) {
-    chunks.push(text.slice(i, i + maxChars));
+  for (let i = 0; i < clean.length; i += maxChars) {
+    chunks.push(clean.slice(i, i + maxChars));
   }
-  return chunks.length ? chunks : [text];
+  return chunks.length ? chunks : clean ? [clean] : [];
+}
+
+/** ~512 tokens with 10% overlap (≈4 chars per token). */
+function chunkTextWithOverlap(text: string, maxChars = 2048, overlapRatio = 0.1): string[] {
+  const clean = sanitizeText(text);
+  if (!clean) return [];
+  const overlap = Math.floor(maxChars * overlapRatio);
+  const step = Math.max(1, maxChars - overlap);
+  const chunks: string[] = [];
+  for (let i = 0; i < clean.length; i += step) {
+    chunks.push(clean.slice(i, i + maxChars));
+    if (i + maxChars >= clean.length) break;
+  }
+  return chunks.length ? chunks : clean ? [clean] : [];
 }
 
 async function updateOnboarding(tenantId: string, patch: Record<string, unknown>): Promise<void> {
@@ -144,18 +170,35 @@ export async function ingestGoogleDriveActivity(input: { tenantId: string }): Pr
   };
   let count = 0;
 
+  const GOOGLE_EXPORT: Record<string, string> = {
+    'application/vnd.google-apps.document': 'text/plain',
+    'application/vnd.google-apps.spreadsheet': 'text/csv',
+    'application/vnd.google-apps.presentation': 'text/plain',
+  };
+
   for (const file of list.files ?? []) {
-    const exportable =
-      file.mimeType.startsWith('text/') ||
-      file.mimeType === 'application/json' ||
-      file.mimeType === 'application/javascript';
-    if (!exportable) continue;
-    const contentRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    if (!contentRes.ok) continue;
-    const text = (await contentRes.text()).slice(0, 50_000);
+    let text = '';
+    const exportMime = GOOGLE_EXPORT[file.mimeType];
+    if (exportMime) {
+      const exportRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (exportRes.ok) text = (await exportRes.text()).slice(0, 50_000);
+    } else {
+      const exportable =
+        file.mimeType.startsWith('text/') ||
+        file.mimeType === 'application/json' ||
+        file.mimeType === 'application/javascript' ||
+        file.mimeType === 'application/pdf';
+      if (!exportable) continue;
+      const contentRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!contentRes.ok) continue;
+      text = (await contentRes.text()).slice(0, 50_000);
+    }
     if (!text.trim()) continue;
     count += await indexIngestDoc({
       tenantId: input.tenantId,
@@ -436,6 +479,167 @@ export async function ingestGitHubActivity(input: { tenantId: string }): Promise
     processed_documents: count,
   });
   await updateOnboarding(input.tenantId, { github: count });
+  return count;
+}
+
+type NotionPageRef = {
+  id: string;
+  title: string;
+  url?: string;
+  lastEdited?: string;
+  properties?: Record<string, unknown>;
+};
+
+export async function ingestNotionActivity(input: { tenantId: string }): Promise<number> {
+  const token = await getValidAccessToken('notion', input.tenantId);
+  if (!token) return 0;
+
+  await upsertIngestionProgress(input.tenantId, 'notion', {
+    status: 'running',
+    total_documents: 50,
+    processed_documents: 0,
+  });
+
+  const pageRefs = new Map<string, NotionPageRef>();
+
+  const standalonePages = await searchAllPages(token);
+  for (const item of standalonePages) {
+    if (item.object !== 'page' || !('id' in item)) continue;
+    const page = item as {
+      id: string;
+      url?: string | null;
+      last_edited_time?: string;
+      properties?: Record<string, unknown>;
+    };
+    pageRefs.set(page.id, {
+      id: page.id,
+      title: pageTitleFromProperties(page.properties),
+      url: page.url ?? undefined,
+      lastEdited: page.last_edited_time,
+      properties: page.properties,
+    });
+  }
+
+  const databases = await listDatabases(token);
+  for (const item of databases) {
+    if (item.object !== 'database' || !('id' in item)) continue;
+    const dbId = item.id;
+    const rows = await queryDatabase(token, dbId);
+    for (const row of rows) {
+      if (row.object !== 'page' || !('id' in row)) continue;
+      const page = row as {
+        id: string;
+        url?: string | null;
+        last_edited_time?: string;
+        properties?: Record<string, unknown>;
+      };
+      pageRefs.set(page.id, {
+        id: page.id,
+        title: pageTitleFromProperties(page.properties),
+        url: page.url ?? undefined,
+        lastEdited: page.last_edited_time,
+        properties: page.properties,
+      });
+    }
+  }
+
+  const pages = [...pageRefs.values()];
+  const total = pages.length;
+  await upsertIngestionProgress(input.tenantId, 'notion', {
+    total_documents: total,
+    processed_documents: 0,
+    status: 'running',
+  });
+
+  let count = 0;
+  let processed = 0;
+
+  for (const page of pages) {
+    try {
+      const text = await getPageContent(token, page.id);
+      if (!text.trim()) {
+        processed += 1;
+        continue;
+      }
+
+      for (const [i, chunk] of chunkTextWithOverlap(text).entries()) {
+        const docId =
+          i === 0
+            ? `${input.tenantId}:notion:${page.id}`
+            : `${input.tenantId}:notion:${page.id}:${i}`;
+        await indexDocument(docId, chunk, {
+          title: page.title,
+          source: 'notion',
+          type: 'page',
+          tenant_id: input.tenantId,
+          url: page.url,
+          last_edited: page.lastEdited,
+        });
+        await indexDocumentEs(input.tenantId, {
+          id: docId,
+          content: chunk,
+          title: page.title,
+          source: 'notion',
+          sourceId: page.id,
+          url: page.url,
+        });
+        count += 1;
+      }
+
+      await upsertNeo4jNode(input.tenantId, 'Document', {
+        id: `${input.tenantId}:notion:${page.id}`,
+        title: page.title,
+        source: 'notion',
+      });
+
+      const entityRaw = await llmClient.complete(
+        `Extract JSON {people:[],projects:[],concepts:[]} from this Notion page text. Return only JSON.\n${text.slice(0, 2000)}`,
+        { temperature: 0, maxTokens: 512 },
+      );
+      try {
+        const parsed = JSON.parse(entityRaw.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as {
+          people?: string[];
+          projects?: string[];
+          concepts?: string[];
+        };
+        for (const p of parsed.people ?? []) {
+          await upsertNeo4jNode(input.tenantId, 'Person', {
+            id: p.toLowerCase().replace(/\s+/g, '-'),
+            name: p,
+          });
+        }
+        for (const p of parsed.projects ?? []) {
+          await upsertNeo4jNode(input.tenantId, 'Project', {
+            id: p.toLowerCase().replace(/\s+/g, '-'),
+            name: p,
+          });
+        }
+        for (const c of parsed.concepts ?? []) {
+          await upsertNeo4jNode(input.tenantId, 'Concept', {
+            id: c.toLowerCase().replace(/\s+/g, '-'),
+            name: c,
+          });
+        }
+      } catch {
+        // skip entity parse errors
+      }
+    } catch {
+      // skip page on fetch errors
+    }
+
+    processed += 1;
+    await upsertIngestionProgress(input.tenantId, 'notion', {
+      processed_documents: processed,
+      status: 'running',
+    });
+  }
+
+  await upsertIngestionProgress(input.tenantId, 'notion', {
+    status: 'completed',
+    total_documents: total,
+    processed_documents: processed,
+  });
+  await updateOnboarding(input.tenantId, { notion: count });
   return count;
 }
 

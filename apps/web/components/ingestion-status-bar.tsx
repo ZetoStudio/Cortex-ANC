@@ -14,6 +14,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   google: 'Google Workspace',
   'google-workspace': 'Google Workspace',
   github: 'GitHub',
+  notion: 'Notion',
   gmail: 'Gmail',
   drive: 'Drive',
 };

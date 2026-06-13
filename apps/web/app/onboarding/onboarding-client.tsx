@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -14,14 +14,21 @@ type OnboardingStatus = {
   progress: Record<string, unknown>;
   workflow?: { percent?: number };
 };
+type ConnectionStatus = {
+  google: boolean;
+  github: boolean;
+  notion: boolean;
+  lastSync?: { google?: string; github?: string; notion?: string };
+};
 
-const ACTIVE_CONNECTORS = [
+const OAUTH_CONNECTORS = [
   { id: 'google-workspace', connectAs: 'google', label: 'Google Workspace' },
   { id: 'github', connectAs: 'github', label: 'GitHub' },
 ] as const;
 
+const API_CONNECTORS = [{ id: 'notion', label: 'Notion' }] as const;
+
 const COMING_SOON = [
-  { id: 'notion', label: 'Notion' },
   { id: 'linear', label: 'Linear' },
   { id: 'discord', label: 'Discord' },
 ];
@@ -31,10 +38,14 @@ export default function OnboardingClient() {
   const searchParams = useSearchParams();
   const { user, isLoaded, tenantId } = useCortexUser();
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [connectError, setConnectError] = useState('');
   const [optimisticConnected, setOptimisticConnected] = useState<Set<string>>(new Set());
+  const [connectingNotion, setConnectingNotion] = useState(false);
   const handledRedirect = useRef<string | null>(null);
+
+  const isAdmin = user?.role === 'admin';
 
   function refreshStatus() {
     if (!tenantId) return;
@@ -46,6 +57,10 @@ export default function OnboardingClient() {
     fetch(`/api/admin/connectors-status${q}`)
       .then((r) => r.json())
       .then((d: { status: ConnectorRow[] }) => setConnectors(d.status ?? []))
+      .catch(() => null);
+    fetch('/api/connections/status')
+      .then((r) => r.json())
+      .then(setConnectionStatus)
       .catch(() => null);
   }
 
@@ -93,29 +108,64 @@ export default function OnboardingClient() {
 
   function isConnected(providerId: string): boolean {
     const row = connectors.find((r) => r.provider === providerId);
-    return Boolean(row?.healthy || optimisticConnected.has(providerId));
+    if (row?.healthy || optimisticConnected.has(providerId)) return true;
+    if (providerId === 'notion' && connectionStatus?.notion) return true;
+    return false;
   }
 
   function connect(connectAs: string) {
-    if (!tenantId) return;
+    if (!tenantId || !isAdmin) return;
     window.location.href = `/api/auth/connect/${encodeURIComponent(connectAs)}`;
+  }
+
+  async function connectNotion(resync = false) {
+    if (!tenantId || !isAdmin || connectingNotion) return;
+    setConnectError('');
+    setConnectingNotion(true);
+    try {
+      const endpoint = resync ? '/api/ingestion/resync' : '/api/connections/notion';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: resync ? JSON.stringify({ provider: 'notion' }) : undefined,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Connect failed (${res.status})`);
+      setOptimisticConnected((prev) => new Set(prev).add('notion'));
+      refreshStatus();
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : 'Notion connect failed');
+    } finally {
+      setConnectingNotion(false);
+    }
+  }
+
+  async function resyncProvider(provider: string) {
+    if (!tenantId || !isAdmin) return;
+    setConnectError('');
+    try {
+      const res = await fetch('/api/ingestion/resync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Sync failed (${res.status})`);
+      refreshStatus();
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : 'Sync failed');
+    }
   }
 
   const googleConnected = isConnected('google-workspace');
   const githubConnected = isConnected('github');
-  const bothConnected = googleConnected && githubConnected;
+  const notionConnected = isConnected('notion');
+  const coreConnected = googleConnected && githubConnected;
   const done = status?.status === 'complete';
   const ingesting = status?.status === 'running';
 
-  const percent = done
-    ? 100
-    : bothConnected
-      ? ingesting
-        ? 70
-        : 50
-      : googleConnected || githubConnected
-        ? 35
-        : 10;
+  const connectedCount = [googleConnected, githubConnected, notionConnected].filter(Boolean).length;
+  const percent = done ? 100 : coreConnected ? (ingesting ? 70 : 50) : connectedCount > 0 ? 35 : 10;
 
   if (!isLoaded) {
     return (
@@ -136,13 +186,25 @@ export default function OnboardingClient() {
     );
   }
 
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
+        <p className="text-zinc-400">Only workspace admins can connect tools during onboarding.</p>
+        <Link href="/executive-desk" className="text-[#14b8a6] hover:underline">
+          Go to Executive Desk →
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] px-6 py-16 text-white">
       <div className="mx-auto max-w-2xl">
         <p className="font-mono text-xs uppercase tracking-[0.3em] text-[#14b8a6]">Onboarding</p>
         <h1 className="mt-4 font-display text-3xl">Connect your tools</h1>
         <p className="mt-2 text-zinc-400">
-          Authorize Google Workspace and GitHub. Cortex ingests your real data — no demo seed.
+          Authorize Google Workspace, GitHub, and Notion. Cortex ingests your real data — no demo
+          seed.
         </p>
 
         {connectError && (
@@ -151,10 +213,10 @@ export default function OnboardingClient() {
           </p>
         )}
 
-        {bothConnected && (
+        {coreConnected && (
           <div className="mt-6 flex items-center gap-2 rounded border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-            Both tools connected — you can enter the platform now.
+            Google and GitHub connected — you can enter the platform now.
           </div>
         )}
 
@@ -169,13 +231,13 @@ export default function OnboardingClient() {
             ? 'Ingestion complete — full context ready'
             : ingesting
               ? 'Ingesting your data in the background…'
-              : bothConnected
+              : coreConnected
                 ? 'Ready to chat — indexing continues in the background'
                 : `Step: ${status?.step ?? 'connect_tools'}`}
         </p>
 
         <ul className="mt-10 space-y-3">
-          {ACTIVE_CONNECTORS.map((c) => {
+          {OAUTH_CONNECTORS.map((c) => {
             const connected = isConnected(c.id);
             return (
               <li
@@ -201,14 +263,68 @@ export default function OnboardingClient() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => connect(c.connectAs)}
+                  onClick={() => (connected ? resyncProvider(c.id) : connect(c.connectAs))}
                   className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider ${
                     connected
                       ? 'border border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/30'
                       : 'bg-[#14b8a6] text-black hover:bg-[#0d9488]'
                   }`}
                 >
-                  {connected ? 'Reconnect' : 'Connect'}
+                  {connected ? 'Re-sync' : 'Connect'}
+                </button>
+              </li>
+            );
+          })}
+
+          {API_CONNECTORS.map((c) => {
+            const connected = isConnected(c.id);
+            const lastSync = connectionStatus?.lastSync?.notion;
+            return (
+              <li
+                key={c.id}
+                className={`flex items-center justify-between border px-4 py-4 transition-colors ${
+                  connected ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-white/10 bg-black'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {connected ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0 text-zinc-600" aria-hidden />
+                  )}
+                  <div>
+                    <p className="font-medium">{c.label}</p>
+                    <p
+                      className={`text-xs ${connected ? 'font-medium text-emerald-400' : 'text-zinc-500'}`}
+                    >
+                      {connected
+                        ? lastSync
+                          ? `Connected · Last synced ${new Date(lastSync).toLocaleString()}`
+                          : 'Connected ✓'
+                        : 'Not connected'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => connectNotion(connected)}
+                  disabled={connectingNotion}
+                  className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider disabled:cursor-not-allowed ${
+                    connected
+                      ? 'border border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/30'
+                      : connectingNotion
+                        ? 'bg-zinc-700 text-zinc-400'
+                        : 'bg-[#14b8a6] text-black hover:bg-[#0d9488]'
+                  }`}
+                >
+                  {connectingNotion && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {connected
+                    ? connectingNotion
+                      ? 'Syncing…'
+                      : 'Re-sync'
+                    : connectingNotion
+                      ? 'Connecting…'
+                      : 'Connect'}
                 </button>
               </li>
             );
@@ -230,7 +346,7 @@ export default function OnboardingClient() {
           ))}
         </ul>
 
-        {bothConnected && (
+        {coreConnected && (
           <div className="mt-12 space-y-3">
             <Link
               href="/executive-desk"

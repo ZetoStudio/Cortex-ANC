@@ -78,6 +78,14 @@ export async function incrementIngestionProgress(
 
 export async function getIngestionProgress(tenantId: string): Promise<IngestionProviderStatus[]> {
   const ctx = tenantCtx(tenantId);
+  // Clear stale "running" rows (worker died, rate limit, etc.)
+  await queryWithTenant(
+    ctx,
+    `UPDATE ingestion_progress SET status = 'failed', updated_at = NOW()
+     WHERE tenant_id = $1 AND status = 'running'
+       AND updated_at < NOW() - INTERVAL '10 minutes'`,
+    [tenantId],
+  );
   const r = await queryWithTenant<{
     provider: string;
     total_documents: number;

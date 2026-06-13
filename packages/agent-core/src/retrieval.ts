@@ -7,6 +7,8 @@ export type SourceCitation = {
   excerpt: string;
   score: number;
   url?: string;
+  from?: string;
+  date?: string;
 };
 
 export function toCitations(results: SearchResult[]): SourceCitation[] {

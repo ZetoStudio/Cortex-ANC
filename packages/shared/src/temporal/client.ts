@@ -1,4 +1,4 @@
-import { Client, Connection } from '@temporalio/client';
+import { Client, Connection, WorkflowIdReusePolicy } from '@temporalio/client';
 
 import type { ApprovalDecision, IngestInitialDataInput, IngestProgress } from './types';
 
@@ -60,17 +60,25 @@ export async function startIngestInitialDataWorkflow(
       taskQueue: TASK_QUEUE,
       workflowId,
       args: [input],
+      workflowIdReusePolicy: WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
     });
     return workflowId;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes('already started')) return workflowId;
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null
+          ? JSON.stringify(err)
+          : String(err);
+    if (message.includes('already started') || message.includes('AlreadyStarted')) {
+      return workflowId;
+    }
     console.warn('[temporal] ingest start failed:', message);
     return null;
   }
 }
 
-const INGEST_PROVIDERS = ['google-workspace', 'github'];
+const INGEST_PROVIDERS = ['google-workspace', 'github', 'notion'];
 
 export async function getIngestWorkflowStatus(tenantId: string): Promise<IngestProgress | null> {
   if (!process.env.TEMPORAL_ADDRESS) return null;
