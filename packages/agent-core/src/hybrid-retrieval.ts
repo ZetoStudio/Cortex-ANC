@@ -1,12 +1,51 @@
 import { GraphClient, searchSimilar, type SearchResult } from '@cortex/graph-core';
 import type { LlmProvider } from '@cortex/shared';
+import {
+  fetchLiveGmailMessages,
+  formatLiveEmailForContext,
+  fetchLiveGitHubContext,
+} from '@cortex/shared';
+import { searchTenantEs } from '@cortex/shared/graph/elasticsearch-client';
 
-import { ensureSeeded, toCitations, type SourceCitation } from './retrieval';
+import { toCitations, type SourceCitation } from './retrieval';
 
 export type RetrieveOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
+  history?: Array<{ role: string; content: string }>;
 };
+
+function isGitHubQuery(query: string, history?: RetrieveOptions['history']): boolean {
+  const recent = (history ?? [])
+    .slice(-4)
+    .map((m) => m.content)
+    .join(' ');
+  const combined = `${query} ${recent}`;
+  return (
+    /\b(github|git hub|repo|repository|commit|pull request|\bpr\b|merge|branch)\b/i.test(
+      combined,
+    ) ||
+    /\b(access|connect).*\bgithub\b/i.test(combined) ||
+    /\b(open|pending).*\b(pr|pull request)/i.test(combined) ||
+    /\b(last|latest|recent).*\b(commit|push)/i.test(combined)
+  );
+}
+
+function isEmailQuery(query: string, history?: RetrieveOptions['history']): boolean {
+  const recent = (history ?? [])
+    .slice(-4)
+    .map((m) => m.content)
+    .join(' ');
+  const combined = `${query} ${recent}`;
+  return (
+    /\b(mail|email|gmail|inbox)\b/i.test(combined) ||
+    /\b(latest|recent|last|newest)\b.*\b(email|mail|message)\b/i.test(combined) ||
+    /\b(from who|who sent|who is it from|when was it|that email|this email|the sender|sent it)\b/i.test(
+      query,
+    )
+  );
+}
 
 const ENTITY_PATTERNS = [
   /\b(?:project|feature|ticket|issue)\s+([A-Za-z0-9_-]+)/gi,
@@ -51,12 +90,51 @@ export async function hybridRetrieveContext(
   topK = 5,
   options?: RetrieveOptions,
 ): Promise<{ context: string; sources: SourceCitation[]; graphContext: string }> {
-  await ensureSeeded();
-  const filters = options?.projectIds?.length ? { projectIds: options.projectIds } : undefined;
-  const vectorResults = rankResults(await searchSimilar(query, topK * 2, filters), query).slice(
-    0,
-    topK,
+  const filters = {
+    ...(options?.tenantId ? { tenantId: options.tenantId } : {}),
+    ...(options?.projectIds?.length ? { projectIds: options.projectIds } : {}),
+  };
+  const hasFilters = Object.keys(filters).length > 0;
+  const qLower = query.toLowerCase();
+  const wantsGitHub = isGitHubQuery(query, options?.history);
+  const sourceHint = wantsGitHub
+    ? 'github'
+    : /\b(mail|email|gmail|inbox)\b/.test(qLower)
+      ? 'gmail'
+      : /\b(drive|file|document)\b/.test(qLower)
+        ? 'drive'
+        : /\b(meeting|calendar|schedule)\b/.test(qLower)
+          ? 'calendar'
+          : /\b(notion|wiki|page|database)\b/.test(qLower)
+            ? 'notion'
+            : undefined;
+
+  let vectorResults = rankResults(
+    await searchSimilar(query, topK * 2, hasFilters ? filters : undefined),
+    query,
   );
+
+  if (sourceHint && options?.tenantId) {
+    const focused = await searchSimilar(query, topK, { ...filters, source: sourceHint });
+    if (focused.length > 0) {
+      const seen = new Set(focused.map((r) => r.id));
+      vectorResults = [...focused, ...vectorResults.filter((r) => !seen.has(r.id))].slice(0, topK);
+    } else {
+      vectorResults = vectorResults.slice(0, topK);
+    }
+  } else {
+    vectorResults = vectorResults.slice(0, topK);
+  }
+
+  if (vectorResults.length === 0 && options?.tenantId) {
+    const esHits = await searchTenantEs(options.tenantId, query, topK);
+    vectorResults = esHits.map((h) => ({
+      id: h.id,
+      text: h.excerpt,
+      metadata: { title: h.title, source: h.source, tenant_id: options.tenantId },
+      score: h.score,
+    }));
+  }
   const hints = extractEntityHints(query);
 
   const graphLines: string[] = [];
@@ -100,9 +178,58 @@ export async function hybridRetrieveContext(
     (r, i, arr) => arr.findIndex((x) => x.id === r.id) === i,
   );
   const sources = [...toCitations(dedupedVector), ...graphSources];
-  const vectorContext = vectorResults
+  let vectorContext = vectorResults
     .map((r, i) => `[${i + 1}] (${r.metadata.source}) ${r.metadata.title}: ${r.text}`)
     .join('\n\n');
+
+  const wantsMail = isEmailQuery(query, options?.history);
+  const wantsLatestMail =
+    wantsMail &&
+    (/\b(latest|recent|last|newest|most recent|just received)\b/i.test(qLower) ||
+      /\b(from who|who sent|who is it from|when was it|the sender)\b/i.test(query));
+
+  if (wantsMail && options?.tenantId) {
+    const emails = await fetchLiveGmailMessages(options.tenantId, wantsLatestMail ? 1 : 3);
+    if (emails.length > 0) {
+      const liveBlock = emails.map(formatLiveEmailForContext).join('\n\n');
+      vectorContext = [
+        `Live Gmail (newest first — use From and Date fields):\n${liveBlock}`,
+        vectorContext,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      for (const email of emails) {
+        sources.unshift({
+          id: `live-gmail-${email.id}`,
+          title: email.subject,
+          source: 'gmail',
+          excerpt: email.snippet.slice(0, 120),
+          score: 1,
+          from: email.from,
+          date: email.date,
+        });
+      }
+    }
+  }
+
+  if (wantsGitHub && options?.tenantId) {
+    const liveGitHub = await fetchLiveGitHubContext(options.tenantId);
+    if (liveGitHub) {
+      vectorContext = [
+        `Live GitHub (connected — use this for commits & open PRs):\n${liveGitHub}`,
+        vectorContext,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      sources.unshift({
+        id: 'live-github',
+        title: 'GitHub (live)',
+        source: 'github',
+        excerpt: liveGitHub.slice(0, 200),
+        score: 1,
+      });
+    }
+  }
 
   const graphContext = graphLines.length ? graphLines.join('\n') : '';
   const context = [vectorContext, graphContext ? `Knowledge graph:\n${graphContext}` : '']

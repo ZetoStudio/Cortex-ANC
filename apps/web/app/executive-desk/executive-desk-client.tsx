@@ -23,7 +23,7 @@ type DeskMessage = {
 };
 
 export function ExecutiveDeskPage() {
-  const { user, role, projectIds } = useCortexUser();
+  const { user, tenantId } = useCortexUser();
   const [messages, setMessages] = useState<DeskMessage[]>([
     {
       id: 'welcome',
@@ -43,10 +43,15 @@ export function ExecutiveDeskPage() {
     setLoading(true);
 
     try {
+      const history = messages
+        .filter((m) => m.id !== 'welcome')
+        .slice(-6)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       const response = await fetch('/api/executive-ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, history }),
       });
       const data = (await response.json()) as {
         answer?: string;
@@ -83,18 +88,14 @@ export function ExecutiveDeskPage() {
     <AppShell
       title="Executive Desk"
       subtitle="Cross-tool intelligence for leadership"
-      badge={<ProjectBadge projectIds={projectIds} role={role} />}
+      badge={<ProjectBadge tenantId={tenantId} />}
       footer={
         <ChatInput
           value={input}
           onValueChange={setInput}
           onSubmit={handleAsk}
           isLoading={loading}
-          placeholder={
-            role === 'client'
-              ? "What's the status of my dashboard project?"
-              : 'Who is working on the Acme launch and what is blocking it?'
-          }
+          placeholder="What's my latest email about? Or ask about GitHub repos, meetings, drive files…"
           variant="dark"
         />
       }

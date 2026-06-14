@@ -15,7 +15,7 @@ type Stats = {
   eventCount: number;
   improvementCount: number;
   kafka: string;
-  nango: string;
+  integrationService: string;
   eventTimeline: { day: string; count: number }[];
 };
 
@@ -91,7 +91,7 @@ export default function AdminPage() {
             <div className="mt-4 grid gap-4 text-sm text-zinc-400 sm:grid-cols-2">
               <div className="dark-card-inset p-4">
                 <p>Kafka: {stats?.kafka ?? '—'}</p>
-                <p className="mt-1">Nango: {stats?.nango ?? '—'}</p>
+                <p className="mt-1">Integration: {stats?.integrationService ?? '—'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href="/admin/connections" className="btn-secondary text-sm">

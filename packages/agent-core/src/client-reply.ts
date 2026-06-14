@@ -12,9 +12,10 @@ export type ClientReplyResult = {
 
 export async function draftClientReply(
   emailContent: string,
-  options?: { projectIds?: string[] },
+  options?: { tenantId?: string; projectIds?: string[]; skipApproval?: boolean },
 ): Promise<ClientReplyResult> {
   const { context, sources, graphContext } = await hybridRetrieveContext(emailContent, 6, {
+    tenantId: options?.tenantId,
     projectIds: options?.projectIds,
   });
 
@@ -25,12 +26,14 @@ export async function draftClientReply(
     { agentRole: 'clientReply', temperature: 0.55, maxTokens: 512 },
   );
 
-  const pendingApprovalId = await requestWriteAction({
-    actionType: 'send_email',
-    connector: 'gmail',
-    payload: { draft, originalEmail: emailContent },
-    requestedBy: 'clients-desk',
-  });
+  const pendingApprovalId = options?.skipApproval
+    ? undefined
+    : await requestWriteAction({
+        actionType: 'send_email',
+        connector: 'gmail',
+        payload: { draft, originalEmail: emailContent },
+        requestedBy: 'email-desk',
+      });
 
   return { draft, sources, pendingApprovalId };
 }

@@ -8,9 +8,6 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@clerk/backend": "^1.21.0"
-  },
   "devDependencies": {
     "typescript": "^5.8.2"
   }

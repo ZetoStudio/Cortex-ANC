@@ -127,10 +127,7 @@ export function FloatingIconsHero({
       </div>
 
       <div className="relative z-10 mx-auto max-w-4xl px-6 text-center md:px-12">
-        <p className="font-mono text-[10px] uppercase tracking-[0.4em] text-zinc-500 md:text-xs">
-          Company intelligence
-        </p>
-        <h1 className="mt-6 font-display text-[clamp(2.75rem,8vw,5.5rem)] leading-[0.95] tracking-tight text-white">
+        <h1 className="font-display text-[clamp(2.75rem,8vw,5.5rem)] leading-[0.95] tracking-tight text-white">
           {heading}
         </h1>
         <p className="mx-auto mt-8 max-w-xl text-base leading-relaxed text-zinc-400 md:text-lg">

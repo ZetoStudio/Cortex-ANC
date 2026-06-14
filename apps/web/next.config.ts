@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     '@cortex/graph-core',
     '@cortex/ui',
   ],
-  serverExternalPackages: ['pg'],
+  serverExternalPackages: ['pg', 'neo4j-driver'],
 };
 
 export default nextConfig;

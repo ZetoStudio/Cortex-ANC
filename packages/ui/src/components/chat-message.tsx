@@ -104,6 +104,8 @@ export type SourceCitationProps = {
   title: string;
   source: string;
   excerpt?: string;
+  from?: string;
+  date?: string;
 };
 
 export function SourceCitations({
@@ -145,6 +147,14 @@ export function SourceCitations({
               [{source.source}]
             </span>{' '}
             {source.title}
+            {source.from && (
+              <span
+                className={cn('block', variant === 'light' ? 'text-gray-500' : 'text-zinc-600')}
+              >
+                From: {source.from}
+                {source.date ? ` · ${source.date}` : ''}
+              </span>
+            )}
           </li>
         ))}
       </ul>

@@ -139,24 +139,10 @@ services:
       - '4000:4000'
     environment:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     command: ['--port', '4000', '--config', '/app/config.yaml']
     volumes:
       - ./infra/litellm/config.yaml:/app/config.yaml:ro
-    networks: [cortex]
-
-  nango:
-    image: nangohq/nango-server:latest
-    container_name: cortex-nango
-    restart: unless-stopped
-    ports:
-      - '3003:3003'
-    environment:
-      NANGO_DATABASE_URL: postgresql://cortex:cortex@postgres:5432/cortex
-      NANGO_SERVER_URL: http://localhost:3003
-      NANGO_CALLBACK_URL: http://localhost:3003/oauth/callback
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks: [cortex]
 
 volumes:

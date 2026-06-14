@@ -3,11 +3,17 @@ model_list:
     litellm_params:
       model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
-  # Ollama disabled for demo — uncomment to re-enable local fallback
-  # - model_name: cortex-ollama
-  #   litellm_params:
-  #     model: ollama/llama3:8b
-  #     api_base: http://host.docker.internal:11434
+  # Fallback when Groq hits TPD/RPM limits — Gemini 2.0 Flash (AI Studio free tier)
+  - model_name: cortex-gemini
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+litellm_settings:
+  num_retries: 1
+  request_timeout: 60
+  fallbacks:
+    - cortex-groq: [cortex-gemini]
 
 general_settings:
   master_key: cortex-local-dev

@@ -29,21 +29,29 @@ async function logInteraction(query: string, answer: string, sources: unknown[])
 export const POST = withAuth(
   async (request, { user }) => {
     try {
-      const body = (await request.json()) as { question?: string; provider?: 'groq' | 'ollama' };
+      const body = (await request.json()) as {
+        question?: string;
+        provider?: 'groq' | 'ollama';
+        history?: Array<{ role: string; content: string }>;
+      };
 
       if (!body.question?.trim()) {
         return NextResponse.json({ error: 'question is required' }, { status: 400 });
       }
 
       const result = await askQuestion(body.question.trim(), {
+        tenantId: user.tenantId,
         projectIds: user.projectIds,
         provider: body.provider,
+        history: body.history,
       });
       const sources = result.sources.map((s) => ({
         id: s.id,
         title: s.title,
         source: s.source,
         excerpt: s.excerpt,
+        from: s.from,
+        date: s.date,
       }));
 
       await logInteraction(body.question.trim(), result.answer, sources);

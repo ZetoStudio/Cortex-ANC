@@ -13,18 +13,9 @@ log() { echo "[start:all] $*"; }
 ensure_env() {
   if [ ! -f .env ]; then
     cp .env.example .env
-    log "Created .env from .env.example"
+    log "Created .env from .env.example — set GROQ_API_KEY, BETTER_AUTH_SECRET, OAuth client IDs"
   fi
-  if ! grep -q NEXTAUTH_SECRET .env 2>/dev/null; then
-    echo "NEXTAUTH_SECRET=cortex-demo-secret-change-in-prod" >> .env
-  fi
-  if ! grep -q NEXTAUTH_URL .env 2>/dev/null; then
-    echo "NEXTAUTH_URL=http://localhost:3000" >> .env
-  fi
-  # Groq-only for demo (Ollama disabled)
-  if grep -q '^LLM_PROVIDER=' .env 2>/dev/null; then
-    sed -i.bak 's/^LLM_PROVIDER=.*/LLM_PROVIDER=groq/' .env && rm -f .env.bak
-  else
+  if ! grep -q '^LLM_PROVIDER=' .env 2>/dev/null; then
     echo "LLM_PROVIDER=groq" >> .env
   fi
 }
@@ -47,6 +38,12 @@ start_service() {
     return
   fi
   log "Starting ${name}..."
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
   nohup bun run --filter "$filter" dev >>"$LOG_DIR/${name}.log" 2>&1 &
   echo $! >"$pidfile"
 }
@@ -69,6 +66,12 @@ start_web() {
   fi
   rm -f apps/web/.next/dev/lock 2>/dev/null || true
   log "Starting Next.js web on :3000..."
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
   (cd apps/web && nohup bun run dev >>"../../$LOG_DIR/web.log" 2>&1 &)
   sleep 2
   # PID of next dev (more reliable than nohup subshell)

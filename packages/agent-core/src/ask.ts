@@ -12,8 +12,10 @@ export type AskQuestionResult = {
 };
 
 export type AskOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
+  history?: Array<{ role: string; content: string }>;
 };
 
 export async function askQuestion(

@@ -26,4 +26,5 @@ export type SearchFilters = {
   project?: string;
   projectIds?: string[];
   type?: string;
+  tenantId?: string;
 };

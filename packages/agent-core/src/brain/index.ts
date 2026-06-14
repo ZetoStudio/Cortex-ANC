@@ -40,36 +40,59 @@ function formatCitations(sources: SourceCitation[]): string {
  */
 export async function runBrain(
   query: string,
-  options?: { skipCache?: boolean; projectIds?: string[]; provider?: LlmProvider },
+  options?: {
+    skipCache?: boolean;
+    tenantId?: string;
+    projectIds?: string[];
+    provider?: LlmProvider;
+    history?: Array<{ role: string; content: string }>;
+  },
 ): Promise<BrainResult> {
   const steps: string[] = [];
   const start = Date.now();
 
   if (!options?.skipCache) {
-    const cached = getCachedAnswer(query);
-    if (cached) {
-      return {
-        answer: cached,
-        sources: [],
-        steps: ['cache'],
-        citationsFormatted: '',
-      };
+    const liveQuery = /\b(latest|recent|last|newest)\b.*\b(email|mail)\b/i.test(query);
+    if (!liveQuery) {
+      const cached = getCachedAnswer(query);
+      if (cached) {
+        return {
+          answer: cached,
+          sources: [],
+          steps: ['cache'],
+          citationsFormatted: '',
+        };
+      }
     }
   }
 
   const llmOpts = { provider: options?.provider, temperature: 0.3, maxTokens: 256 };
 
-  steps.push('reasoning');
-  const plan = await llmClient.complete(query, {
-    ...llmOpts,
-    agentRole: 'reasoning',
-  });
-  log.debug({ plan: plan.slice(0, 120) }, 'reasoning complete');
+  const skipReasoning =
+    query.length < 100 ||
+    /\b(latest|recent|last|newest)\b.*\b(email|mail|message|commit|pr)\b/i.test(query) ||
+    /\bwhat('s| is) my (latest|recent|last)\b/i.test(query) ||
+    /\b(from who|who sent|who is it from|when was it|the sender)\b/i.test(query) ||
+    /\b(github|open pr|pull request|can you access|can u access)\b/i.test(query);
+
+  let plan = query;
+  if (!skipReasoning) {
+    steps.push('reasoning');
+    plan = await llmClient.complete(query, {
+      ...llmOpts,
+      agentRole: 'reasoning',
+    });
+    log.debug({ plan: plan.slice(0, 120) }, 'reasoning complete');
+  } else {
+    steps.push('direct');
+  }
 
   steps.push('retrieval');
   const { context, sources, graphContext } = await hybridRetrieveContext(query, 8, {
+    tenantId: options?.tenantId,
     projectIds: options?.projectIds,
     provider: options?.provider,
+    history: options?.history,
   });
   log.debug({ docCount: sources.length, graph: !!graphContext }, 'retrieval complete');
 
@@ -88,11 +111,22 @@ export async function runBrain(
   }
 
   steps.push('response');
+  const historyBlock = options?.history?.length
+    ? `Recent conversation:\n${options.history
+        .slice(-4)
+        .map((m) => `${m.role}: ${m.content}`)
+        .join('\n')}\n\n`
+    : '';
+
   const answer = await llmClient.complete(
-    `Sub-questions to address:\n${plan}\n\nContext:\n${context || '(no documents)'}${
-      graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
-    }\n\nQuestion: ${query}`,
-    { ...llmOpts, agentRole: 'response', temperature: 0.45, maxTokens: 1024 },
+    skipReasoning
+      ? `${historyBlock}Context:\n${context || '(no documents)'}${
+          graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
+        }\n\nQuestion: ${query}\n\nAnswer directly. For emails, always state sender (From) and date.`
+      : `${historyBlock}Sub-questions to address:\n${plan}\n\nContext:\n${context || '(no documents)'}${
+          graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
+        }\n\nQuestion: ${query}`,
+    { ...llmOpts, agentRole: 'response', temperature: 0.35, maxTokens: 512 },
   );
 
   log.info({ steps, ms: Date.now() - start }, 'brain run complete');

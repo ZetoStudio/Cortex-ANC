@@ -1,33 +1,43 @@
-import { getServerSession } from 'next-auth';
+import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { can, type AuthUser, type CortexRole } from '@cortex/auth';
+import { can, sessionToAuthUser, type AuthUser } from '@cortex/auth';
+import { auditFromContext, type TenantContext } from '@cortex/shared';
 
-import { authOptions } from './auth-options';
+import { auth } from './auth-server';
 
 export type CortexSessionUser = AuthUser;
 
-export async function getSessionUser(): Promise<CortexSessionUser | null> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  const u = session.user as {
-    email: string;
-    name?: string | null;
-    role?: CortexRole;
-    projectIds?: string[];
-  };
+export function toTenantContext(user: AuthUser, correlationId?: string): TenantContext {
   return {
-    id: (session.user as { id?: string }).id ?? u.email,
-    email: u.email,
-    name: u.name ?? u.email,
-    role: u.role ?? 'client',
-    projectIds: u.projectIds ?? [],
+    tenantId: user.tenantId,
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    projectIds: user.projectIds,
+    isPlatformAdmin: user.isPlatformAdmin,
+    correlationId,
   };
+}
+
+export async function getSessionUser(): Promise<CortexSessionUser | null> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return null;
+  return sessionToAuthUser({
+    user: session.user as {
+      id: string;
+      email: string;
+      name?: string | null;
+      tenantId?: string | null;
+      role?: string | null;
+    },
+  });
 }
 
 type RouteHandler = (
   request: Request,
-  context: { user: CortexSessionUser },
+  context: { user: CortexSessionUser; tenant: TenantContext },
 ) => Promise<Response> | Response;
 
 export function withAuth(handler: RouteHandler, requiredActions?: string[]) {
@@ -42,6 +52,16 @@ export function withAuth(handler: RouteHandler, requiredActions?: string[]) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
-    return handler(request, { user });
+    const correlationId = request.headers.get('x-correlation-id') ?? crypto.randomUUID();
+    const tenant = toTenantContext(user, correlationId);
+    return handler(request, { user, tenant });
   };
+}
+
+export async function auditAction(
+  tenant: TenantContext,
+  eventType: Parameters<typeof auditFromContext>[1],
+  extra?: Parameters<typeof auditFromContext>[2],
+): Promise<void> {
+  await auditFromContext(tenant, eventType, extra);
 }

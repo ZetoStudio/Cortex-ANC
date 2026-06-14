@@ -41,19 +41,26 @@ export class PgVectorStore {
   async indexDocument(id: string, text: string, metadata: DocumentMetadata): Promise<void> {
     const embedding = await embedText(text);
     const vectorLiteral = `[${embedding.join(',')}]`;
+    const tenantId = typeof metadata.tenant_id === 'string' ? metadata.tenant_id : null;
 
     await this.pool.query(
-      `INSERT INTO cortex_documents (id, content, metadata, embedding)
-       VALUES ($1, $2, $3, $4::vector)
+      `INSERT INTO cortex_documents (id, content, metadata, embedding, tenant_id)
+       VALUES ($1, $2, $3, $4::vector, $5)
        ON CONFLICT (id) DO UPDATE SET
          content = EXCLUDED.content,
          metadata = EXCLUDED.metadata,
-         embedding = EXCLUDED.embedding`,
-      [id, text, metadata, vectorLiteral],
+         embedding = EXCLUDED.embedding,
+         tenant_id = EXCLUDED.tenant_id`,
+      [id, text, metadata, vectorLiteral, tenantId],
     );
   }
 
-  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
+  private async runVectorSearch(
+    query: string,
+    topK: number,
+    filters: SearchFilters | undefined,
+    sequentialScan: boolean,
+  ): Promise<SearchResult[]> {
     const embedding = await embedText(query);
     const vectorLiteral = `[${embedding.join(',')}]`;
 
@@ -76,29 +83,52 @@ export class PgVectorStore {
       params.push(filters.type);
       conditions.push(`metadata->>'type' = $${params.length}`);
     }
+    if (filters?.tenantId) {
+      params.push(filters.tenantId);
+      conditions.push(`tenant_id = $${params.length}`);
+    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const client = await this.pool.connect();
+    try {
+      if (sequentialScan) {
+        await client.query('SET LOCAL enable_indexscan = off');
+      }
+      const result = await client.query<{
+        id: string;
+        content: string;
+        metadata: DocumentMetadata;
+        score: number;
+      }>(
+        `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) AS score
+         FROM cortex_documents
+         ${whereClause}
+         ORDER BY embedding <=> $1::vector
+         LIMIT $2`,
+        params,
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        text: row.content,
+        metadata: row.metadata,
+        score: row.score,
+      }));
+    } finally {
+      client.release();
+    }
+  }
 
-    const result = await this.pool.query<{
-      id: string;
-      content: string;
-      metadata: DocumentMetadata;
-      score: number;
-    }>(
-      `SELECT id, content, metadata, 1 - (embedding <=> $1::vector) AS score
-       FROM cortex_documents
-       ${whereClause}
-       ORDER BY embedding <=> $1::vector
-       LIMIT $2`,
-      params,
-    );
+  async searchSimilar(query: string, topK = 5, filters?: SearchFilters): Promise<SearchResult[]> {
+    let results = await this.runVectorSearch(query, topK, filters, false);
+    // IVFFlat returns nothing on small tables until REINDEX — fall back to seq scan.
+    if (results.length === 0) {
+      results = await this.runVectorSearch(query, topK, filters, true);
+    }
+    return results;
+  }
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      text: row.content,
-      metadata: row.metadata,
-      score: row.score,
-    }));
+  async reindexEmbeddings(): Promise<void> {
+    await this.pool.query('REINDEX INDEX CONCURRENTLY IF EXISTS cortex_documents_embedding_idx');
   }
 
   async close(): Promise<void> {

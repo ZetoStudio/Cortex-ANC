@@ -1,5 +1,5 @@
-import { ClientsDeskPage } from './clients-desk-client';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <ClientsDeskPage />;
+  redirect('/email-desk');
 }

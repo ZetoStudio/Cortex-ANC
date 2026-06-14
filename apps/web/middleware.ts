@@ -1,8 +1,6 @@
-import { getToken } from 'next-auth/jwt';
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC = ['/', '/auth/login', '/auth/signup', '/api/auth', '/api/brain/health'];
+const PUBLIC = ['/', '/auth/login', '/auth/continue', '/auth/signup', '/sign-in', '/sign-up'];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -10,25 +8,24 @@ function isPublic(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // API routes use withAuth — avoid middleware fetch deadlock on /api/*
+  if (pathname.startsWith('/api/')) return NextResponse.next();
   if (isPublic(pathname)) return NextResponse.next();
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET ?? 'cortex-demo-secret-change-in-prod',
+  const sessionRes = await fetch(new URL('/api/auth/get-session', request.url), {
+    headers: {
+      cookie: request.headers.get('cookie') ?? '',
+    },
   });
+  const session = sessionRes.ok
+    ? ((await sessionRes.json()) as { user?: { tenantId?: string | null } })
+    : null;
 
-  if (!token) {
+  if (!session?.user) {
     const login = new URL('/auth/login', request.url);
     login.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(login);
-  }
-
-  if (pathname.startsWith('/admin') && token.role !== 'admin' && token.role !== 'ceo') {
-    return NextResponse.redirect(new URL('/executive-desk', request.url));
-  }
-
-  if (pathname.startsWith('/brain') && token.role === 'client') {
-    return NextResponse.redirect(new URL('/executive-desk', request.url));
   }
 
   return NextResponse.next();

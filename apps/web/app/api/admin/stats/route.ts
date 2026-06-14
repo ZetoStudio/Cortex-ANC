@@ -1,65 +1,70 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
-import pg from 'pg';
 
 import { withAuth } from '@/lib/auth';
+import { queryWithTenant } from '@cortex/shared';
+import { countNeo4jNodes } from '@cortex/shared/graph/neo4j-client';
 
-const { Pool } = pg;
+export const GET = withAuth(
+  async (_request, { tenant }) => {
+    let connectors = 0;
 
-export const GET = withAuth(async () => {
-  let connectors = 0;
-
-  try {
-    const generatedPath = path.resolve(
-      process.cwd(),
-      '../../packages/integration-core/src/connectors/registry.generated.ts',
-    );
-    const content = readFileSync(generatedPath, 'utf8');
-    connectors = [...content.matchAll(/\{ id: '([^']+)', name: '([^']+)', status: '([^']+)'/g)]
-      .length;
-  } catch {
     try {
-      const alt = path.resolve(
+      const generatedPath = path.resolve(
         process.cwd(),
-        'packages/integration-core/src/connectors/registry.generated.ts',
+        '../../packages/integration-core/src/connectors/registry.generated.ts',
       );
-      const content = readFileSync(alt, 'utf8');
+      const content = readFileSync(generatedPath, 'utf8');
       connectors = [...content.matchAll(/\{ id: '([^']+)', name: '([^']+)', status: '([^']+)'/g)]
         .length;
     } catch {
-      connectors = 706;
+      try {
+        const alt = path.resolve(
+          process.cwd(),
+          'packages/integration-core/src/connectors/registry.generated.ts',
+        );
+        const content = readFileSync(alt, 'utf8');
+        connectors = [...content.matchAll(/\{ id: '([^']+)', name: '([^']+)', status: '([^']+)'/g)]
+          .length;
+      } catch {
+        connectors = 706;
+      }
     }
-  }
 
-  let pendingApprovals = 0;
-  let documentCount = 0;
-  let nodeCount = 0;
-  let edgeCount = 0;
-  let eventCount = 0;
-  let improvementCount = 0;
-  let eventTimeline: { day: string; count: number }[] = [];
+    let pendingApprovals = 0;
+    let documentCount = 0;
+    let nodeCount = 0;
+    let edgeCount = 0;
+    let eventCount = 0;
+    let improvementCount = 0;
+    let eventTimeline: { day: string; count: number }[] = [];
 
-  const dbUrl = process.env.DATABASE_URL;
-  if (dbUrl) {
+    let connectedTools = 0;
     try {
-      const pool = new Pool({ connectionString: dbUrl });
-      const [a, d, n, e, qa, imp, timeline] = await Promise.all([
-        pool.query(`SELECT COUNT(*)::int AS c FROM cortex_approvals WHERE status = 'pending'`),
-        pool.query(`SELECT COUNT(*)::int AS c FROM cortex_documents`),
-        pool.query(`SELECT COUNT(*)::int AS c FROM cortex_nodes`),
-        pool.query(`SELECT COUNT(*)::int AS c FROM cortex_edges`),
-        pool.query(`SELECT COUNT(*)::int AS c FROM qa_logs`),
-        pool.query(
+      const [a, d, n, e, qa, imp, timeline, ch] = await Promise.all([
+        queryWithTenant<{ c: number }>(
+          tenant,
+          `SELECT COUNT(*)::int AS c FROM cortex_approvals WHERE status = 'pending'`,
+        ),
+        queryWithTenant<{ c: number }>(tenant, `SELECT COUNT(*)::int AS c FROM cortex_documents`),
+        queryWithTenant<{ c: number }>(tenant, `SELECT COUNT(*)::int AS c FROM cortex_nodes`),
+        queryWithTenant<{ c: number }>(tenant, `SELECT COUNT(*)::int AS c FROM cortex_edges`),
+        queryWithTenant<{ c: number }>(tenant, `SELECT COUNT(*)::int AS c FROM qa_logs`),
+        queryWithTenant<{ c: number }>(
+          tenant,
           `SELECT COUNT(*)::int AS c FROM improvement_suggestions WHERE status = 'pending'`,
         ),
-        pool.query(`
-          SELECT to_char(created_at::date, 'Mon DD') AS day, COUNT(*)::int AS count
-          FROM qa_logs
-          WHERE created_at > NOW() - INTERVAL '7 days'
-          GROUP BY created_at::date
-          ORDER BY created_at::date
-        `),
+        queryWithTenant<{ day: string; count: number }>(
+          tenant,
+          `SELECT to_char(created_at::date, 'Mon DD') AS day, COUNT(*)::int AS count
+         FROM qa_logs WHERE created_at > NOW() - INTERVAL '7 days'
+         GROUP BY created_at::date ORDER BY created_at::date`,
+        ),
+        queryWithTenant<{ c: number }>(
+          tenant,
+          `SELECT COUNT(*)::int AS c FROM connector_health WHERE status = 'connected'`,
+        ),
       ]);
       pendingApprovals = a.rows[0]?.c ?? 0;
       documentCount = d.rows[0]?.c ?? 0;
@@ -67,23 +72,29 @@ export const GET = withAuth(async () => {
       edgeCount = e.rows[0]?.c ?? 0;
       eventCount = qa.rows[0]?.c ?? 0;
       improvementCount = imp.rows[0]?.c ?? 0;
-      eventTimeline = timeline.rows as { day: string; count: number }[];
-      await pool.end();
+      eventTimeline = timeline.rows;
+      connectedTools = ch.rows[0]?.c ?? 0;
     } catch {
-      // tables may not exist
+      // tables may not exist before migration
     }
-  }
 
-  return NextResponse.json({
-    connectors,
-    pendingApprovals,
-    documentCount,
-    nodeCount,
-    edgeCount,
-    eventCount,
-    improvementCount,
-    eventTimeline,
-    kafka: process.env.KAFKA_BROKERS ?? 'localhost:9092',
-    nango: process.env.NANGO_SERVER_URL ?? 'http://localhost:3003',
-  });
-}, ['admin:read']);
+    const neo4jNodes = await countNeo4jNodes(tenant.tenantId);
+
+    return NextResponse.json({
+      connectors,
+      connectedTools,
+      pendingApprovals,
+      documentCount,
+      nodeCount: Math.max(nodeCount, neo4jNodes),
+      edgeCount,
+      eventCount,
+      improvementCount,
+      eventTimeline,
+      tenantId: tenant.tenantId,
+      kafka: process.env.KAFKA_BROKERS ?? 'localhost:9092',
+      integrationService:
+        process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL ?? 'http://localhost:3010',
+    });
+  },
+  ['admin:read'],
+);

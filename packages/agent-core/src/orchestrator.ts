@@ -5,8 +5,10 @@ import { runBrain, type BrainResult } from './brain';
 export type OrchestratorResult = BrainResult;
 
 export type OrchestratorOptions = {
+  tenantId?: string;
   projectIds?: string[];
   provider?: LlmProvider;
+  history?: Array<{ role: string; content: string }>;
 };
 
 /** LangGraph-style pipeline — delegates to Cortex Brain. */
