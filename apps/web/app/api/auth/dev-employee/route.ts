@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
-import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/lib/auth-server';
 import { employeeDevBypassEnabled } from '@/lib/auth-config';
@@ -10,6 +9,14 @@ const EMPLOYEE_DEV_PASSWORD = process.env.EMPLOYEE_DEV_PASSWORD ?? 'cortex-emplo
 const DEV_TENANT = 'tenant-hr-dev';
 
 async function ensureSeedEmployee(pool: Pool): Promise<string> {
+  const byEmail = await pool.query(
+    `SELECT id FROM hr_employees
+     WHERE tenant_id = $1 AND email = $2 AND status = 'active'
+     LIMIT 1`,
+    [DEV_TENANT, EMPLOYEE_DEV_EMAIL],
+  );
+  if (byEmail.rows.length) return String(byEmail.rows[0].id);
+
   const existing = await pool.query(
     `SELECT id FROM hr_employees
      WHERE tenant_id = $1 AND status = 'active'
@@ -18,13 +25,13 @@ async function ensureSeedEmployee(pool: Pool): Promise<string> {
   );
   if (existing.rows.length) return String(existing.rows[0].id);
 
-  const employeeId = `emp-${randomUUID().slice(0, 12)}`;
+  const employeeId = 'emp-demo-alex';
   await pool.query(
     `INSERT INTO hr_employees (
        id, tenant_id, employee_code, full_name, email, department, designation,
        join_date, status, salary_monthly, currency
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE, 'active', 75000, 'INR')
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT (id) DO NOTHING`,
     [
       employeeId,
       DEV_TENANT,
