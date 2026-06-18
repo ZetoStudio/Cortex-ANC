@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { canManageWorkspace } from '@cortex/auth';
+
 import { AppShell, ProjectBadge } from '@/components/app-shell';
 import { useCortexUser } from '@/hooks/use-cortex-user';
 
@@ -39,7 +41,7 @@ export function ConnectorsGallery() {
   const [apiKey, setApiKey] = useState('');
   const [apiToken, setApiToken] = useState('');
 
-  const canManage = user?.role === 'admin' || user?.role === 'ceo';
+  const canManage = user ? canManageWorkspace(user.role) : false;
 
   const [githubNeedsScope, setGithubNeedsScope] = useState(false);
 

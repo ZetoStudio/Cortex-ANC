@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { canManageWorkspace } from '@cortex/auth';
+
 import { withAuth } from '@/lib/auth';
 import { queryWithTenant } from '@cortex/shared';
 
@@ -20,7 +22,7 @@ export const GET = withAuth(
 
 export const PATCH = withAuth(
   async (request, { tenant, user }) => {
-    if (user.role !== 'admin' && user.role !== 'ceo') {
+    if (!canManageWorkspace(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

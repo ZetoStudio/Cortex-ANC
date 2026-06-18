@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { resolveRoleFromEmail } from '@cortex/auth';
 import { betterAuth } from 'better-auth';
 import { Pool } from 'pg';
 
@@ -42,7 +43,7 @@ export const auth = betterAuth({
       role: {
         type: 'string',
         required: false,
-        defaultValue: 'admin',
+        defaultValue: 'member',
         input: false,
       },
       employeeId: {
@@ -56,6 +57,29 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
+          const role = resolveRoleFromEmail(
+            user.email ?? '',
+            user.role as string | null | undefined,
+          );
+          if (role === 'super_admin') {
+            if (!user.tenantId) {
+              const tenantId = `tenant-${randomUUID().slice(0, 8)}`;
+              const slug = 'platform-admin';
+              await pool.query(
+                `INSERT INTO tenants (id, name, slug, owner_user_id) VALUES ($1, $2, $3, $4)`,
+                [tenantId, 'Platform Admin', slug, user.id],
+              );
+              await pool.query(`INSERT INTO tenant_onboarding (tenant_id) VALUES ($1)`, [tenantId]);
+              await pool.query(
+                `UPDATE "user" SET "tenantId" = $1, role = 'super_admin' WHERE id = $2`,
+                [tenantId, user.id],
+              );
+            } else {
+              await pool.query(`UPDATE "user" SET role = 'super_admin' WHERE id = $1`, [user.id]);
+            }
+            return;
+          }
+
           if (user.tenantId) return;
           const tenantId = `tenant-${randomUUID().slice(0, 8)}`;
           const slug = (user.email?.split('@')[0] ?? 'workspace')
@@ -68,8 +92,9 @@ export const auth = betterAuth({
             [tenantId, name, slug || tenantId, user.id],
           );
           await pool.query(`INSERT INTO tenant_onboarding (tenant_id) VALUES ($1)`, [tenantId]);
-          await pool.query(`UPDATE "user" SET "tenantId" = $1, role = 'admin' WHERE id = $2`, [
+          await pool.query(`UPDATE "user" SET "tenantId" = $1, role = $2 WHERE id = $3`, [
             tenantId,
+            role,
             user.id,
           ]);
         },

@@ -1,7 +1,5 @@
 import { queryWithTenant } from '../db/tenant-pool';
-import type { TenantContext } from '../tenant/types';
-
-type CortexRole = 'admin' | 'ceo' | 'client' | 'hr' | 'employee';
+import type { CortexRole, TenantContext } from '../tenant/types';
 
 export type TenantProject = {
   id: string;
@@ -18,7 +16,7 @@ type ProjectRow = {
 };
 
 export function isOrgLead(role: string): boolean {
-  return role === 'admin' || role === 'ceo';
+  return role === 'admin' || role === 'ceo' || role === 'super_admin';
 }
 
 export async function listTenantProjects(tenant: TenantContext): Promise<TenantProject[]> {

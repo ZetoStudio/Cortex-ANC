@@ -137,7 +137,7 @@ export default function HrUploadValidateClient() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? 'Import failed');
-      router.push(`/hr/employees?imported=1`);
+      router.push(`/hr/employees?submitted=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
       await refresh();

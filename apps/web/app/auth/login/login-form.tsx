@@ -231,7 +231,7 @@ export default function LoginForm({
           <>
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-xs text-zinc-600">dev</span>
+              <span className="text-xs text-zinc-600">development only</span>
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
             {hrDevEnabled && (
@@ -254,10 +254,6 @@ export default function LoginForm({
                 Sign in as Employee
               </button>
             )}
-            <p className="mt-2 text-center text-[10px] text-zinc-600">
-              Dev bypass — set <code className="text-zinc-500">HR_DEV_BYPASS</code> /{' '}
-              <code className="text-zinc-500">EMPLOYEE_DEV_BYPASS=true</code> in .env
-            </p>
           </>
         )}
 

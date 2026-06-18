@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { trackCortexIngestion } from '@/lib/cortex-ingest';
 import { withHrAuth } from '@/lib/hr-auth';
+import { notifySuperAdminEmployeeApproval } from '@/lib/notify-super-admin';
 import { buildUploadValidation, clearHrUpload, loadHrUpload } from '@/lib/hr-upload-server';
 import { importHrEmployeesBatch, listHrEmployeeEmails } from '@cortex/shared';
 
-export const POST = withHrAuth(async (request, { tenant }) => {
+export const POST = withHrAuth(async (request, { tenant, user }) => {
   const body = (await request.json()) as { uploadId?: string };
   const uploadId = body.uploadId?.trim();
   if (!uploadId) {
@@ -31,18 +31,16 @@ export const POST = withHrAuth(async (request, { tenant }) => {
     );
   }
 
-  const { imported } = await importHrEmployeesBatch(tenant, payload.rows);
-  await trackCortexIngestion(tenant, {
-    provider: 'hr',
-    entity: 'hr_employees',
-    action: 'bulk_import',
-    count: imported,
-  });
+  const { pending, approvals } = await importHrEmployeesBatch(tenant, payload.rows, user.id);
+  for (const approval of approvals) {
+    await notifySuperAdminEmployeeApproval(tenant.tenantId, approval, user.name);
+  }
+
   await clearHrUpload(tenant.tenantId, uploadId);
 
   return NextResponse.json({
     success: true,
-    imported,
-    message: `${imported} employees imported`,
+    pending,
+    message: `${pending} employee requests submitted for approval`,
   });
 });

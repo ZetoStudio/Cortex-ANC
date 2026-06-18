@@ -7,6 +7,9 @@ const TASK_QUEUE = 'cortex-approvals';
 let clientPromise: Promise<Client> | null = null;
 
 async function getClient(): Promise<Client> {
+  if (!process.env.TEMPORAL_ADDRESS || process.env.RAILWAY_ENV === 'true') {
+    throw new Error('Temporal not configured');
+  }
   if (!clientPromise) {
     const address = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
     clientPromise = Connection.connect({ address }).then(

@@ -29,17 +29,17 @@ bun run start:all:stop  # stop background services
 docker compose down     # stop containers
 ```
 
-## Demo accounts
+## Sign-in
 
-Not shown on the login page:
+- **Production:** Google OAuth (configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`).
+- **Super admin:** `aneeshg@zeto.studio` (Google sign-in) — Panel access and employee approvals.
+- **Local dev only:** HR and Employee shortcuts on the login page when `HR_DEV_BYPASS` / `EMPLOYEE_DEV_BYPASS` are enabled (hidden in production).
 
-| Role   | Email               | Password   |
-| ------ | ------------------- | ---------- |
-| CEO    | `ceo@cortex.anc`    | `password` |
-| Client | `client@cortex.anc` | `password` |
-| Admin  | `admin@cortex.anc`  | `password` |
+## Railway (V1)
 
-**CEO** → Acme + Global Dynamics (internal). **Client** → BetaCorp only. **Admin** → all projects + admin tools.
+```bash
+# Build & run via Dockerfile; set DATABASE_URL and run postdeploy:
+bun run db:migrate
+```
 
-See [Executive guide](./docs/executive-guide.md) and [Client guide](./docs/client-guide.md) for role-specific walkthroughs.  
-**Seed reference:** [docs/seed-data.md](./docs/seed-data.md) — all demo companies, documents, and sample questions.
+Health check: `GET /api/health` → `{ status, db }`. See [.env.example](./.env.example) for required variables.

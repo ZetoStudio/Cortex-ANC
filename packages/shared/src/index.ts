@@ -26,5 +26,6 @@ export * from './hr/hr-store';
 export * from './hr/employee-store';
 export * from './hr/employee-upload';
 export * from './hr/google-sheets';
+export * from './hr/approval-store';
 export * from './gmail/live';
 export * from './github/live';

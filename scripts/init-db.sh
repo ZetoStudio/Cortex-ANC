@@ -108,6 +108,30 @@ if [ -f scripts/migrations/005_sync_and_embedding_cache.sql ]; then
     -f scripts/migrations/005_sync_and_embedding_cache.sql
 fi
 
+if [ -f scripts/migrations/006_tenant_projects.sql ]; then
+  echo "→ Applying tenant projects migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/006_tenant_projects.sql
+fi
+
+if [ -f scripts/migrations/007_hr_module.sql ]; then
+  echo "→ Applying HR module migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/007_hr_module.sql
+fi
+
+if [ -f scripts/migrations/008_employee_portal.sql ]; then
+  echo "→ Applying employee portal migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/008_employee_portal.sql
+fi
+
+if [ -f scripts/migrations/009_hr_employee_approvals.sql ]; then
+  echo "→ Applying HR employee approvals migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/009_hr_employee_approvals.sql
+fi
+
 if [ -f scripts/migrate-auth.sh ]; then
   bash scripts/migrate-auth.sh || true
 fi
