@@ -8,7 +8,7 @@ const EMPLOYEE_DEV_EMAIL = 'employee@cortex.local';
 const EMPLOYEE_DEV_PASSWORD = process.env.EMPLOYEE_DEV_PASSWORD ?? 'cortex-employee-dev';
 const DEV_TENANT = 'tenant-hr-dev';
 
-async function ensureSeedEmployee(pool: Pool): Promise<string> {
+async function findDevEmployee(pool: Pool): Promise<string | null> {
   const byEmail = await pool.query(
     `SELECT id FROM hr_employees
      WHERE tenant_id = $1 AND email = $2 AND status = 'active'
@@ -16,36 +16,10 @@ async function ensureSeedEmployee(pool: Pool): Promise<string> {
     [DEV_TENANT, EMPLOYEE_DEV_EMAIL],
   );
   if (byEmail.rows.length) return String(byEmail.rows[0].id);
-
-  const existing = await pool.query(
-    `SELECT id FROM hr_employees
-     WHERE tenant_id = $1 AND status = 'active'
-     ORDER BY created_at ASC LIMIT 1`,
-    [DEV_TENANT],
-  );
-  if (existing.rows.length) return String(existing.rows[0].id);
-
-  const employeeId = 'emp-demo-alex';
-  await pool.query(
-    `INSERT INTO hr_employees (
-       id, tenant_id, employee_code, full_name, email, department, designation,
-       join_date, status, salary_monthly, currency
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE, 'active', 75000, 'INR')
-     ON CONFLICT (id) DO NOTHING`,
-    [
-      employeeId,
-      DEV_TENANT,
-      'EMP-DEV01',
-      'Alex Employee',
-      EMPLOYEE_DEV_EMAIL,
-      'Engineering',
-      'Software Engineer',
-    ],
-  );
-  return employeeId;
+  return null;
 }
 
-/** Dev-only: sign in as the first active employee in the default HR tenant. */
+/** Dev-only: sign in as an existing employee record (HR must add the roster first). */
 export async function POST(request: Request) {
   if (!employeeDevBypassEnabled) {
     return NextResponse.json({ error: 'Employee dev bypass is disabled' }, { status: 403 });
@@ -54,7 +28,16 @@ export async function POST(request: Request) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    const employeeId = await ensureSeedEmployee(pool);
+    const employeeId = await findDevEmployee(pool);
+    if (!employeeId) {
+      return NextResponse.json(
+        {
+          error:
+            'No employee record for employee@cortex.local. Add employees in HR first (upload or manual).',
+        },
+        { status: 404 },
+      );
+    }
 
     const existing = await pool.query(`SELECT id FROM "user" WHERE email = $1 LIMIT 1`, [
       EMPLOYEE_DEV_EMAIL,
@@ -65,7 +48,7 @@ export async function POST(request: Request) {
         body: {
           email: EMPLOYEE_DEV_EMAIL,
           password: EMPLOYEE_DEV_PASSWORD,
-          name: 'Alex Employee',
+          name: 'Employee',
         },
         headers: request.headers,
         asResponse: true,
