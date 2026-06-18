@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 import { LayoutDashboard, LayoutPanelTop, LogOut, Mail, Plug } from 'lucide-react';
 
+import { canAccessPanel } from '@cortex/auth';
+
 import { useCortexUser } from '@/hooks/use-cortex-user';
 
 import { IngestionStatusBar } from './ingestion-status-bar';
@@ -45,7 +47,9 @@ export function AppShell({
             <p className="mt-1 text-xs text-zinc-500">Single Brain OS</p>
           </div>
           <nav className="flex-1 space-y-1 p-3">
-            {NAV.map(({ href, label, icon: Icon }) => {
+            {NAV.filter(
+              (item) => item.href !== '/panel' || (user && canAccessPanel(user.role)),
+            ).map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(`${href}/`);
               return (
                 <Link

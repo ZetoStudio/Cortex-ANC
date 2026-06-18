@@ -1,6 +1,5 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AddEmployeesMenu } from '@/components/hr/add-employees-menu';
@@ -10,10 +9,8 @@ import { HrShell } from '@/components/hr/hr-shell';
 
 export default function HrEmployeesClient() {
   const { data, post } = useHr();
-  const searchParams = useSearchParams();
-  const [toast, setToast] = useState(
-    searchParams.get('imported') === '1' ? 'Employees imported successfully' : '',
-  );
+  const [toast, setToast] = useState('');
+  const [warning, setWarning] = useState('');
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -27,8 +24,9 @@ export default function HrEmployeesClient() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setWarning('');
     try {
-      await post({
+      const res = await post({
         action: 'employee',
         fullName: form.fullName,
         email: form.email,
@@ -38,6 +36,13 @@ export default function HrEmployeesClient() {
         joinDate: form.joinDate || null,
         status: 'active',
       });
+      if (res.ok) {
+        const body = (await res.json()) as { pending?: boolean; warning?: string };
+        if (body.pending) {
+          setToast('Employee submitted for super admin approval');
+          if (body.warning) setWarning(body.warning);
+        }
+      }
       setForm({
         fullName: '',
         email: '',
@@ -51,15 +56,25 @@ export default function HrEmployeesClient() {
     }
   }
 
+  const pending = data?.pendingEmployeeApprovals ?? [];
+
   return (
     <HrShell title="Employees" subtitle="Roster and salary tracking" actions={<AddEmployeesMenu />}>
       {toast && <HrToast message={toast} onDone={() => setToast('')} />}
+      {warning && (
+        <p className="mx-auto mb-4 max-w-4xl rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+          {warning}
+        </p>
+      )}
       <div className="mx-auto max-w-4xl space-y-6">
         <form
           onSubmit={handleAdd}
           className="rounded-xl border border-[#2a2a2a] bg-[#0f0f0f] p-4 space-y-3"
         >
           <h2 className="text-sm font-medium text-white">Add employee manually</h2>
+          <p className="text-xs text-zinc-500">
+            New employees are sent to the super admin for approval before they appear in the roster.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               className="input-dark text-sm"
@@ -107,9 +122,30 @@ export default function HrEmployeesClient() {
             disabled={saving}
             className="rounded-lg bg-[#a78bfa] px-4 py-2 text-sm font-medium text-[#0a0a0a] disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Add employee'}
+            {saving ? 'Submitting…' : 'Submit for approval'}
           </button>
         </form>
+
+        {pending.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5">
+            <div className="border-b border-amber-500/20 px-4 py-3">
+              <h2 className="text-sm font-medium text-amber-100">Pending your approval requests</h2>
+            </div>
+            <table className="w-full text-left text-sm">
+              <tbody>
+                {pending.map((a) => (
+                  <tr key={a.id} className="border-t border-amber-500/10">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-white">{a.employeeData.fullName}</p>
+                      <p className="text-xs text-zinc-500">{a.employeeData.email}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-amber-200">Awaiting super admin</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="overflow-hidden rounded-xl border border-[#2a2a2a]">
           <table className="w-full text-left text-sm">
@@ -142,7 +178,7 @@ export default function HrEmployeesClient() {
               {!data?.employees.length && (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-zinc-600">
-                    No employees yet
+                    No approved employees yet
                   </td>
                 </tr>
               )}

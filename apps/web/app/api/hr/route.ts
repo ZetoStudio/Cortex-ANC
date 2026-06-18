@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 
 import { trackCortexIngestion } from '@/lib/cortex-ingest';
+import { notifySuperAdminEmployeeApproval } from '@/lib/notify-super-admin';
 import { withHrAuth } from '@/lib/hr-auth';
 import {
+  createEmployeeApprovalRequest,
   createEmergencyNotice,
   createLeaveRequest,
   createPayrollRun,
   getHrDashboardStats,
+  listApprovalsByRequester,
   listEmergencyNotices,
   listHrEmployees,
   listHrPlugins,
@@ -20,16 +23,18 @@ import {
   HR_PLUGIN_CATALOG,
 } from '@cortex/shared';
 
-export const GET = withHrAuth(async (_request, { tenant }) => {
-  const [stats, employees, payroll, payslips, leave, notices, plugins] = await Promise.all([
-    getHrDashboardStats(tenant),
-    listHrEmployees(tenant),
-    listPayrollRuns(tenant),
-    listPayslips(tenant),
-    listLeaveRequests(tenant),
-    listEmergencyNotices(tenant),
-    listHrPlugins(tenant),
-  ]);
+export const GET = withHrAuth(async (_request, { tenant, user }) => {
+  const [stats, employees, payroll, payslips, leave, notices, plugins, pendingApprovals] =
+    await Promise.all([
+      getHrDashboardStats(tenant),
+      listHrEmployees(tenant),
+      listPayrollRuns(tenant),
+      listPayslips(tenant),
+      listLeaveRequests(tenant),
+      listEmergencyNotices(tenant),
+      listHrPlugins(tenant),
+      listApprovalsByRequester(tenant, user.id),
+    ]);
 
   return NextResponse.json({
     stats,
@@ -40,6 +45,7 @@ export const GET = withHrAuth(async (_request, { tenant }) => {
     notices,
     plugins,
     pluginCatalog: HR_PLUGIN_CATALOG,
+    pendingEmployeeApprovals: pendingApprovals.filter((a) => a.status === 'pending'),
   });
 });
 
@@ -51,8 +57,7 @@ export const POST = withHrAuth(async (request, { tenant, user }) => {
 
   switch (body.action) {
     case 'employee': {
-      const employee = await upsertHrEmployee(tenant, {
-        id: body.id as string | undefined,
+      const payload = {
         employeeCode: String(body.employeeCode ?? ''),
         fullName: String(body.fullName ?? ''),
         email: String(body.email ?? ''),
@@ -63,14 +68,31 @@ export const POST = withHrAuth(async (request, { tenant, user }) => {
         salaryMonthly: Number(body.salaryMonthly ?? 0),
         currency: String(body.currency ?? 'INR'),
         emergencyContact: (body.emergencyContact as Record<string, string>) ?? {},
+      };
+
+      if (body.id) {
+        const employee = await upsertHrEmployee(tenant, { id: body.id as string, ...payload });
+        await trackCortexIngestion(tenant, {
+          provider: 'hr',
+          entity: 'hr_employees',
+          action: 'update',
+          recordId: employee.id,
+        });
+        return NextResponse.json({ employee });
+      }
+
+      const approval = await createEmployeeApprovalRequest(tenant, user.id, payload);
+      const emailResult = await notifySuperAdminEmployeeApproval(
+        tenant.tenantId,
+        approval,
+        user.name,
+      );
+      return NextResponse.json({
+        approval,
+        pending: true,
+        emailSent: emailResult.sent,
+        warning: emailResult.warning,
       });
-      await trackCortexIngestion(tenant, {
-        provider: 'hr',
-        entity: 'hr_employees',
-        action: body.id ? 'update' : 'create',
-        recordId: employee.id,
-      });
-      return NextResponse.json({ employee });
     }
     case 'payroll': {
       const result = await createPayrollRun(tenant, {

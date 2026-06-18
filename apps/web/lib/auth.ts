@@ -1,10 +1,13 @@
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { can, sessionToAuthUser, type AuthUser } from '@cortex/auth';
+import { can, resolveRoleFromEmail, sessionToAuthUser, type AuthUser } from '@cortex/auth';
 import { auditFromContext, resolveUserProjectIds, type TenantContext } from '@cortex/shared';
+import { Pool } from 'pg';
 
 import { auth } from './auth-server';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 export type CortexSessionUser = AuthUser;
 
@@ -35,6 +38,12 @@ export async function getSessionUser(): Promise<CortexSessionUser | null> {
     },
   });
   if (!base) return null;
+
+  const resolvedRole = resolveRoleFromEmail(base.email, session.user.role);
+  if (resolvedRole !== session.user.role) {
+    await pool.query(`UPDATE "user" SET role = $1 WHERE id = $2`, [resolvedRole, base.id]);
+    base.role = resolvedRole;
+  }
 
   const tenant = toTenantContext(base);
   const projectIds = await resolveUserProjectIds(tenant, base.id, base.role);

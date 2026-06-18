@@ -28,14 +28,27 @@ type Stats = {
   connectors: number;
   connectedTools: number;
   pendingApprovals: number;
+  employeePendingApprovals?: number;
   documentCount: number;
   nodeCount: number;
   edgeCount: number;
   eventCount: number;
   improvementCount: number;
   kafka: string;
+  kafkaLive?: boolean;
+  temporalLive?: boolean;
   integrationService: string;
+  integrationLive?: boolean;
   eventTimeline: { day: string; count: number }[];
+};
+
+type PanelUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  tenantId: string | null;
+  tenantName: string | null;
 };
 
 type GraphNode = { id: string; label: string; type: string };
@@ -436,8 +449,15 @@ function EventTicker({ events, compact = false }: { events: string[]; compact?: 
 
 type Tab = 'connections' | 'logs' | 'improvements';
 
-export function PanelDashboard({ initialTab }: { initialTab?: Tab }) {
+export function PanelDashboard({
+  initialTab,
+  view = 'overview',
+}: {
+  initialTab?: Tab;
+  view?: 'overview' | 'admin';
+}) {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [users, setUsers] = useState<PanelUser[]>([]);
   const [graph, setGraph] = useState<{
     nodes: GraphNode[];
     edges: GraphEdge[];
@@ -495,8 +515,15 @@ export function PanelDashboard({ initialTab }: { initialTab?: Tab }) {
       setWorkspaceName(name);
       setWorkspaceDraft(name);
     }
+    if (view === 'admin') {
+      const usersRes = await fetch('/api/panel/users');
+      if (usersRes.ok) {
+        const d = (await usersRes.json()) as { users: PanelUser[] };
+        setUsers(d.users ?? []);
+      }
+    }
     setLoading(false);
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     let active = true;
@@ -566,344 +593,427 @@ export function PanelDashboard({ initialTab }: { initialTab?: Tab }) {
         <div className="glass-card flex flex-wrap items-center gap-4 px-6 py-3 md:gap-6">
           <p className="card-title text-sm">System health</p>
           <span className="hidden h-4 w-px bg-border md:inline" aria-hidden />
-          <StatusDot label="Kafka" live />
-          <StatusDot label="Temporal" live />
-          <StatusDot label="Integration API" live />
+          <StatusDot label="Kafka" live={stats?.kafkaLive ?? false} />
+          <StatusDot label="Temporal" live={stats?.temporalLive ?? false} />
+          <StatusDot label="Integration API" live={stats?.integrationLive ?? false} />
           <StatusDot label="Connectors" live={connectedCount > 0} />
         </div>
-        <div className="grid gap-2 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <ClientProjectsPanel compact />
+        {view === 'overview' && (
+          <div className="grid gap-2 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <ClientProjectsPanel compact />
+            </div>
+            <div className="space-y-2">
+              <div className="panel-surface">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <Pencil className="size-3 text-primary" />
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                    Workspace
+                  </p>
+                </div>
+                <GradientDivider />
+                <div className="p-2.5">
+                  <input
+                    value={workspaceDraft}
+                    onChange={(e) => setWorkspaceDraft(e.target.value)}
+                    className="input-dark w-full rounded-lg px-2.5 py-1.5 text-xs"
+                    placeholder="Workspace name"
+                  />
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <p className="truncate text-[10px] text-muted-foreground">{workspaceName}</p>
+                    <button
+                      type="button"
+                      disabled={savingWorkspace || workspaceDraft.trim().length === 0}
+                      onClick={saveWorkspaceName}
+                      className="btn-primary shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold disabled:opacity-40"
+                    >
+                      {savingWorkspace ? '…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="panel-surface">
+                <div className="flex items-center gap-2 border-b border-[#1f1f1f]/80 px-3 py-2">
+                  <Activity className="size-3 text-[#14b8a6]" />
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+                    Live activity
+                  </p>
+                </div>
+                <div className="p-2">
+                  <EventTicker events={tickerEvents} compact />
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <div className="panel-surface">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <Pencil className="size-3 text-primary" />
-                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                  Workspace
-                </p>
+        )}
+
+        {view === 'admin' ? (
+          <>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+              <PanelStatCard
+                className="lg:col-span-2"
+                label="Events ingested"
+                value={stats?.eventCount ?? 0}
+                icon={Zap}
+                accent="teal"
+                footer={<MetricsSparkline data={stats?.eventTimeline ?? []} id="events" />}
+              />
+              <PanelStatCard
+                label="Active connectors"
+                value={`${connectedCount}/${connectorTotal}`}
+                icon={Plug}
+                accent="blue"
+                sub={`${connectedCount} live`}
+                footer={<ConnectorProgress connected={connectedCount} total={connectorTotal} />}
+              />
+              <PanelStatCard
+                label="Knowledge graph"
+                value={stats?.nodeCount ?? 0}
+                icon={GitBranch}
+                accent="violet"
+                sub={`${stats?.edgeCount ?? 0} edges`}
+                footer={<EntityTypePills data={pieData} />}
+              />
+              <PanelStatCard
+                label="Documents indexed"
+                value={stats?.documentCount ?? 0}
+                icon={FileStack}
+                accent="cyan"
+                footer={<SourceBars sources={docBySource} />}
+              />
+              <PanelStatCard
+                label="Email approvals"
+                value={stats?.pendingApprovals ?? 0}
+                icon={ShieldCheck}
+                accent="amber"
+                href="/approvals"
+                cta="Review queue"
+              />
+              <PanelStatCard
+                label="Improvements"
+                value={stats?.improvementCount ?? 0}
+                icon={Sparkles}
+                accent="rose"
+                onCta={() => setTab('improvements')}
+                cta="View suggestions"
+              />
+            </div>
+
+            <div className="panel-surface overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 md:px-6">
+                <ShieldCheck className="size-4 text-[#14b8a6]" />
+                <h2 className="card-title text-sm">All users</h2>
               </div>
               <GradientDivider />
-              <div className="p-2.5">
-                <input
-                  value={workspaceDraft}
-                  onChange={(e) => setWorkspaceDraft(e.target.value)}
-                  className="input-dark w-full rounded-lg px-2.5 py-1.5 text-xs"
-                  placeholder="Workspace name"
-                />
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <p className="truncate text-[10px] text-muted-foreground">{workspaceName}</p>
-                  <button
-                    type="button"
-                    disabled={savingWorkspace || workspaceDraft.trim().length === 0}
-                    onClick={saveWorkspaceName}
-                    className="btn-primary shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold disabled:opacity-40"
-                  >
-                    {savingWorkspace ? '…' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="panel-surface">
-              <div className="flex items-center gap-2 border-b border-[#1f1f1f]/80 px-3 py-2">
-                <Activity className="size-3 text-[#14b8a6]" />
-                <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                  Live activity
-                </p>
-              </div>
-              <div className="p-2">
-                <EventTicker events={tickerEvents} compact />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Metrics bento */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-          <PanelStatCard
-            className="lg:col-span-2"
-            label="Events ingested"
-            value={stats?.eventCount ?? 0}
-            icon={Zap}
-            accent="teal"
-            footer={<MetricsSparkline data={stats?.eventTimeline ?? []} id="events" />}
-          />
-          <PanelStatCard
-            label="Active connectors"
-            value={`${connectedCount}/${connectorTotal}`}
-            icon={Plug}
-            accent="blue"
-            sub={`${connectedCount} live`}
-            footer={<ConnectorProgress connected={connectedCount} total={connectorTotal} />}
-          />
-          <PanelStatCard
-            label="Knowledge graph"
-            value={stats?.nodeCount ?? 0}
-            icon={GitBranch}
-            accent="violet"
-            sub={`${stats?.edgeCount ?? 0} edges`}
-            footer={<EntityTypePills data={pieData} />}
-          />
-          <PanelStatCard
-            label="Documents indexed"
-            value={stats?.documentCount ?? 0}
-            icon={FileStack}
-            accent="cyan"
-            footer={<SourceBars sources={docBySource} />}
-          />
-          <PanelStatCard
-            label="Pending approvals"
-            value={stats?.pendingApprovals ?? 0}
-            icon={ShieldCheck}
-            accent="amber"
-            href="/approvals"
-            cta="Review queue"
-          />
-          <PanelStatCard
-            label="Improvements"
-            value={stats?.improvementCount ?? 0}
-            icon={Sparkles}
-            accent="rose"
-            onCta={() => setTab('improvements')}
-            cta="View suggestions"
-          />
-        </div>
-
-        {/* Row 3 — graph + chart */}
-        <div className="grid gap-4 lg:grid-cols-12">
-          <div className="panel-surface min-h-[300px] lg:col-span-8">
-            <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-              <div className="flex items-center gap-2">
-                <GitBranch className="size-4 text-[#8b5cf6]" />
-                <h2 className="card-title text-sm">Knowledge graph</h2>
-              </div>
-              <Badge variant="live">Live</Badge>
-            </div>
-            <GradientDivider />
-            <div className="p-3 md:p-6">
-              {graph ? (
-                <GraphOverview nodes={graph.nodes} edges={graph.edges} seeded={graph.seeded} />
-              ) : (
-                <div className="flex h-64 items-center justify-center text-zinc-600">
-                  Loading graph…
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="panel-surface min-h-[240px] lg:col-span-4">
-            <div className="flex items-center gap-2 px-4 py-3 md:px-6 md:py-4">
-              <Activity className="size-4 text-[#14b8a6]" />
-              <h2 className="card-title text-sm">Q&A activity</h2>
-              <span className="body-muted text-[10px]">7 days</span>
-            </div>
-            <GradientDivider />
-            <div className="p-3 md:p-6">
-              <div className="h-[min(380px,42vh)] min-h-[240px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats?.eventTimeline ?? []}>
-                    <defs>
-                      <linearGradient id="qaGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.5} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="day"
-                      tick={{ fontSize: 10, fill: '#71717a' }}
-                      axisLine={{ stroke: '#1f1f1f' }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: '#71717a' }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                      width={28}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: '#141414',
-                        border: '1px solid #1f1f1f',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#14b8a6"
-                      fill="url(#qaGrad)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="panel-surface">
-          <div className="flex flex-wrap items-center gap-2 border-b border-[#1f1f1f]/80 px-4 py-3">
-            {(
-              [
-                ['connections', 'Connections', Plug],
-                ['logs', 'Logs', Activity],
-                ['improvements', 'Improvements', AlertCircle],
-              ] as const
-            ).map(([id, label, Icon]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
-                  tab === id
-                    ? 'bg-[#14b8a6]/15 font-medium text-[#14b8a6]'
-                    : 'text-zinc-500 hover:bg-[#1a1a1a] hover:text-white'
-                }`}
-              >
-                <Icon className="size-3.5" />
-                {label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-zinc-500 hover:text-white"
-            >
-              <RefreshCw className="size-3" /> Refresh
-            </button>
-          </div>
-
-          {tab === 'connections' && (
-            <div className="px-4 pb-4 pt-3">
-              <table className="w-full min-w-[520px] text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#1f1f1f] text-zinc-500">
-                    <th className="pb-2 font-medium">Provider</th>
-                    <th className="pb-2 font-medium">Status</th>
-                    <th className="pb-2 font-medium">Last sync</th>
-                    <th className="pb-2 font-medium">Docs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(gallery.length > 0
-                    ? gallery.map((g) => ({
-                        id: g.id,
-                        name: g.name,
-                        connected: g.connected,
-                        processed: g.processed,
-                      }))
-                    : connectors.map((c) => ({
-                        id: c.provider,
-                        name: c.provider.replace(/-/g, ' '),
-                        connected: c.healthy,
-                        processed: 0,
-                      }))
-                  ).map((row) => {
-                    const conn = connectors.find((c) => c.provider === row.id);
-                    return (
-                      <tr key={row.id} className="border-b border-[#1f1f1f]/60">
-                        <td className="py-2.5 capitalize text-white">{row.name}</td>
-                        <td className="py-2.5">
-                          {row.connected ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-400">
-                              <CheckCircle2 className="size-3" /> Live
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-zinc-500">
-                              <XCircle className="size-3" /> Idle
-                            </span>
-                          )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Role</th>
+                      <th className="px-4 py-3">Tenant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} className="border-t border-border/60">
+                        <td className="px-4 py-3 text-foreground">{u.email}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{u.name ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-md bg-[#14b8a6]/10 px-2 py-0.5 text-xs text-[#14b8a6]">
+                            {u.role}
+                          </span>
                         </td>
-                        <td className="py-2.5 text-zinc-500">
-                          {conn?.lastSync ? new Date(conn.lastSync).toLocaleString() : '—'}
-                        </td>
-                        <td className="py-2.5 font-mono text-zinc-400">
-                          {row.processed > 0 ? row.processed : '—'}
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {u.tenantName ?? u.tenantId ?? '—'}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <Link
-                href="/connectors"
-                className="mt-4 inline-flex items-center gap-1 text-xs text-[#14b8a6] hover:underline"
-              >
-                Manage connectors <ArrowRight className="size-3" />
-              </Link>
-            </div>
-          )}
-
-          {tab === 'logs' && (
-            <div className="space-y-2 px-4 pb-4 pt-3">
-              {logs.length === 0 ? (
-                <p className="text-sm text-zinc-500">No Q&A logs yet.</p>
-              ) : (
-                logs.slice(0, 25).map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border border-[#1f1f1f] bg-[#0a0a0a]/50 px-3 py-2"
-                  >
-                    <p className="min-w-0 flex-1 text-sm text-zinc-300">{log.query}</p>
-                    <div className="shrink-0 text-right">
-                      <Badge
-                        variant={
-                          log.success === true ? 'live' : log.success === false ? 'default' : 'cyan'
-                        }
-                      >
-                        {log.success === null ? '—' : log.success ? 'pass' : 'fail'}
-                      </Badge>
-                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
-                        {new Date(log.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {tab === 'improvements' && (
-            <div className="space-y-2 px-4 pb-4 pt-3">
-              {improvements.length === 0 ? (
-                <p className="text-sm text-zinc-500">No improvement suggestions.</p>
-              ) : (
-                improvements.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a]/50 px-3 py-3"
-                  >
-                    <p className="text-sm text-zinc-200">{item.suggestion}</p>
-                    <p className="mt-1 text-[10px] text-zinc-500">
-                      {item.category} · confidence {Number(item.confidence).toFixed(2)} ·{' '}
-                      {item.status}
-                    </p>
-                    {item.status === 'pending' && (
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
-                          className="rounded-md bg-[#14b8a6]/15 px-2 py-1 text-[10px] text-[#14b8a6]"
-                          onClick={() => decideImprovement(item.id, 'applied')}
-                        >
-                          Apply
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-md border border-[#2a2a2a] px-2 py-1 text-[10px] text-zinc-400"
-                          onClick={() => decideImprovement(item.id, 'dismissed')}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
+                    ))}
+                    {!users.length && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                          No users found
+                        </td>
+                      </tr>
                     )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+              <PanelStatCard
+                label="Active connectors"
+                value={`${connectedCount}/${connectorTotal}`}
+                icon={Plug}
+                accent="blue"
+                sub={`${connectedCount} live`}
+              />
+              <PanelStatCard
+                label="Employee approvals"
+                value={stats?.employeePendingApprovals ?? 0}
+                icon={ShieldCheck}
+                accent="amber"
+                href="/panel/approvals"
+                cta="Review queue"
+              />
+              <PanelStatCard
+                label="Documents"
+                value={stats?.documentCount ?? 0}
+                icon={FileStack}
+                accent="cyan"
+                href="/panel/admin"
+                cta="Full metrics"
+              />
+            </div>
+          </>
+        )}
+
+        {view === 'overview' && (
+          <>
+            <div className="grid gap-4 lg:grid-cols-12">
+              <div className="panel-surface min-h-[300px] lg:col-span-8">
+                <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="size-4 text-[#8b5cf6]" />
+                    <h2 className="card-title text-sm">Knowledge graph</h2>
                   </div>
-                ))
+                  <Badge variant="live">Live</Badge>
+                </div>
+                <GradientDivider />
+                <div className="p-3 md:p-6">
+                  {graph ? (
+                    <GraphOverview nodes={graph.nodes} edges={graph.edges} seeded={graph.seeded} />
+                  ) : (
+                    <div className="flex h-64 items-center justify-center text-zinc-600">
+                      Loading graph…
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="panel-surface min-h-[240px] lg:col-span-4">
+                <div className="flex items-center gap-2 px-4 py-3 md:px-6 md:py-4">
+                  <Activity className="size-4 text-[#14b8a6]" />
+                  <h2 className="card-title text-sm">Q&A activity</h2>
+                  <span className="body-muted text-[10px]">7 days</span>
+                </div>
+                <GradientDivider />
+                <div className="p-3 md:p-6">
+                  <div className="h-[min(380px,42vh)] min-h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={stats?.eventTimeline ?? []}>
+                        <defs>
+                          <linearGradient id="qaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.5} />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="day"
+                          tick={{ fontSize: 10, fill: '#71717a' }}
+                          axisLine={{ stroke: '#1f1f1f' }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: '#71717a' }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                          width={28}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: '#141414',
+                            border: '1px solid #1f1f1f',
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="count"
+                          stroke="#14b8a6"
+                          fill="url(#qaGrad)"
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="panel-surface">
+              <div className="flex flex-wrap items-center gap-2 border-b border-[#1f1f1f]/80 px-4 py-3">
+                {(
+                  [
+                    ['connections', 'Connections', Plug],
+                    ['logs', 'Logs', Activity],
+                    ['improvements', 'Improvements', AlertCircle],
+                  ] as const
+                ).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setTab(id)}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
+                      tab === id
+                        ? 'bg-[#14b8a6]/15 font-medium text-[#14b8a6]'
+                        : 'text-zinc-500 hover:bg-[#1a1a1a] hover:text-white'
+                    }`}
+                  >
+                    <Icon className="size-3.5" />
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => void refresh()}
+                  className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-zinc-500 hover:text-white"
+                >
+                  <RefreshCw className="size-3" /> Refresh
+                </button>
+              </div>
+
+              {tab === 'connections' && (
+                <div className="px-4 pb-4 pt-3">
+                  <table className="w-full min-w-[520px] text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-[#1f1f1f] text-zinc-500">
+                        <th className="pb-2 font-medium">Provider</th>
+                        <th className="pb-2 font-medium">Status</th>
+                        <th className="pb-2 font-medium">Last sync</th>
+                        <th className="pb-2 font-medium">Docs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(gallery.length > 0
+                        ? gallery.map((g) => ({
+                            id: g.id,
+                            name: g.name,
+                            connected: g.connected,
+                            processed: g.processed,
+                          }))
+                        : connectors.map((c) => ({
+                            id: c.provider,
+                            name: c.provider.replace(/-/g, ' '),
+                            connected: c.healthy,
+                            processed: 0,
+                          }))
+                      ).map((row) => {
+                        const conn = connectors.find((c) => c.provider === row.id);
+                        return (
+                          <tr key={row.id} className="border-b border-[#1f1f1f]/60">
+                            <td className="py-2.5 capitalize text-white">{row.name}</td>
+                            <td className="py-2.5">
+                              {row.connected ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-400">
+                                  <CheckCircle2 className="size-3" /> Live
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-zinc-500">
+                                  <XCircle className="size-3" /> Idle
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 text-zinc-500">
+                              {conn?.lastSync ? new Date(conn.lastSync).toLocaleString() : '—'}
+                            </td>
+                            <td className="py-2.5 font-mono text-zinc-400">
+                              {row.processed > 0 ? row.processed : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <Link
+                    href="/connectors"
+                    className="mt-4 inline-flex items-center gap-1 text-xs text-[#14b8a6] hover:underline"
+                  >
+                    Manage connectors <ArrowRight className="size-3" />
+                  </Link>
+                </div>
+              )}
+
+              {tab === 'logs' && (
+                <div className="space-y-2 px-4 pb-4 pt-3">
+                  {logs.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No Q&A logs yet.</p>
+                  ) : (
+                    logs.slice(0, 25).map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-start justify-between gap-3 rounded-lg border border-[#1f1f1f] bg-[#0a0a0a]/50 px-3 py-2"
+                      >
+                        <p className="min-w-0 flex-1 text-sm text-zinc-300">{log.query}</p>
+                        <div className="shrink-0 text-right">
+                          <Badge
+                            variant={
+                              log.success === true
+                                ? 'live'
+                                : log.success === false
+                                  ? 'default'
+                                  : 'cyan'
+                            }
+                          >
+                            {log.success === null ? '—' : log.success ? 'pass' : 'fail'}
+                          </Badge>
+                          <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                            {new Date(log.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {tab === 'improvements' && (
+                <div className="space-y-2 px-4 pb-4 pt-3">
+                  {improvements.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No improvement suggestions.</p>
+                  ) : (
+                    improvements.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a]/50 px-3 py-3"
+                      >
+                        <p className="text-sm text-zinc-200">{item.suggestion}</p>
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          {item.category} · confidence {Number(item.confidence).toFixed(2)} ·{' '}
+                          {item.status}
+                        </p>
+                        {item.status === 'pending' && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              className="rounded-md bg-[#14b8a6]/15 px-2 py-1 text-[10px] text-[#14b8a6]"
+                              onClick={() => decideImprovement(item.id, 'applied')}
+                            >
+                              Apply
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-md border border-[#2a2a2a] px-2 py-1 text-[10px] text-zinc-400"
+                              onClick={() => decideImprovement(item.id, 'dismissed')}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

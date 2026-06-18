@@ -3,8 +3,10 @@ import path from 'node:path';
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/auth';
+import { isRailway } from '@/lib/auth-config';
 import { queryWithTenant } from '@cortex/shared';
 import { countNeo4jNodes } from '@cortex/shared/graph/neo4j-client';
+import { Pool } from 'pg';
 
 export const GET = withAuth(
   async (_request, { tenant }) => {
@@ -80,10 +82,39 @@ export const GET = withAuth(
 
     const neo4jNodes = await countNeo4jNodes(tenant.tenantId);
 
+    let employeePendingApprovals = 0;
+    try {
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const hrPending = await pool.query(
+        `SELECT COUNT(*)::int AS c FROM hr_employee_approvals WHERE status = 'pending'`,
+      );
+      employeePendingApprovals = hrPending.rows[0]?.c ?? 0;
+      await pool.end();
+    } catch {
+      // table may not exist before migration
+    }
+
+    const kafkaConfigured = Boolean(process.env.KAFKA_BROKERS?.trim()) && !isRailway;
+    const temporalConfigured = Boolean(process.env.TEMPORAL_ADDRESS?.trim()) && !isRailway;
+    const integrationUrl =
+      process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL ?? 'http://localhost:3010';
+    let integrationLive = false;
+    if (!isRailway && integrationUrl) {
+      try {
+        const ping = await fetch(`${integrationUrl}/health`, {
+          signal: AbortSignal.timeout(2000),
+        });
+        integrationLive = ping.ok;
+      } catch {
+        integrationLive = false;
+      }
+    }
+
     return NextResponse.json({
       connectors,
       connectedTools,
       pendingApprovals,
+      employeePendingApprovals,
       documentCount,
       nodeCount: Math.max(nodeCount, neo4jNodes),
       edgeCount,
@@ -91,9 +122,11 @@ export const GET = withAuth(
       improvementCount,
       eventTimeline,
       tenantId: tenant.tenantId,
-      kafka: process.env.KAFKA_BROKERS ?? 'localhost:9092',
-      integrationService:
-        process.env.NEXT_PUBLIC_INTEGRATION_SERVICE_URL ?? 'http://localhost:3010',
+      kafka: process.env.KAFKA_BROKERS ?? 'unconfigured',
+      kafkaLive: kafkaConfigured,
+      temporalLive: temporalConfigured,
+      integrationService: integrationUrl,
+      integrationLive,
     });
   },
   ['admin:read'],

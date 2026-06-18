@@ -126,6 +126,12 @@ if [ -f scripts/migrations/008_employee_portal.sql ]; then
     -f scripts/migrations/008_employee_portal.sql
 fi
 
+if [ -f scripts/migrations/009_hr_employee_approvals.sql ]; then
+  echo "→ Applying HR employee approvals migration…"
+  psql "${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}" \
+    -f scripts/migrations/009_hr_employee_approvals.sql
+fi
+
 if [ -f scripts/migrate-auth.sh ]; then
   bash scripts/migrate-auth.sh || true
 fi

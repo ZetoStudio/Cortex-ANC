@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { queryWithTenant } from '../db/tenant-pool';
 import type { TenantContext } from '../tenant/types';
+import { createEmployeeApprovalRequest, type HrEmployeeApproval } from './approval-store';
 import { getHrPluginById, HR_PLUGIN_CATALOG } from './plugin-catalog';
 import type {
   HrDashboardStats,
@@ -105,11 +106,12 @@ export async function listHrEmployeeEmails(tenant: TenantContext): Promise<strin
 export async function importHrEmployeesBatch(
   tenant: TenantContext,
   rows: HrUploadRow[],
-): Promise<{ imported: number }> {
-  let imported = 0;
+  requestedBy: string,
+): Promise<{ pending: number; approvals: HrEmployeeApproval[] }> {
+  const approvals: HrEmployeeApproval[] = [];
   for (const row of rows) {
     const input = uploadRowToEmployeeInput(row);
-    await upsertHrEmployee(tenant, {
+    const approval = await createEmployeeApprovalRequest(tenant, requestedBy, {
       employeeCode: '',
       fullName: input.fullName,
       email: input.email,
@@ -121,9 +123,9 @@ export async function importHrEmployeesBatch(
       currency: input.currency,
       emergencyContact: input.emergencyContact,
     });
-    imported += 1;
+    approvals.push(approval);
   }
-  return { imported };
+  return { pending: approvals.length, approvals };
 }
 
 export async function listPayrollRuns(tenant: TenantContext): Promise<HrPayrollRun[]> {

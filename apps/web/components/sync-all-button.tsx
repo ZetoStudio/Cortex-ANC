@@ -3,6 +3,8 @@
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 
+import { canManageWorkspace } from '@cortex/auth';
+
 import { useCortexUser } from '@/hooks/use-cortex-user';
 
 export function SyncAllButton({ className = '' }: { className?: string }) {
@@ -10,7 +12,7 @@ export function SyncAllButton({ className = '' }: { className?: string }) {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
 
-  const canSync = user?.role === 'admin' || user?.role === 'ceo';
+  const canSync = user ? canManageWorkspace(user.role) : false;
 
   if (!canSync) return null;
 

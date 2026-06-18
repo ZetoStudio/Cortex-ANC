@@ -231,7 +231,7 @@ export default function LoginForm({
           <>
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-xs text-zinc-600">or</span>
+              <span className="text-xs text-zinc-600">development only</span>
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
             {hrDevEnabled && (

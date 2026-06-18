@@ -12,6 +12,7 @@ import type {
   HrPayslip,
   HrPluginConnection,
   HrPluginDefinition,
+  HrEmployeeApproval,
 } from '@cortex/shared';
 
 type HrData = {
@@ -23,6 +24,7 @@ type HrData = {
   notices: HrEmergencyNotice[];
   plugins: HrPluginConnection[];
   pluginCatalog: HrPluginDefinition[];
+  pendingEmployeeApprovals?: HrEmployeeApproval[];
 };
 
 const HrContext = createContext<{

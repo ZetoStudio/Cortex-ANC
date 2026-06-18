@@ -181,6 +181,36 @@ export async function getGmailThread(
   };
 }
 
+export async function sendGmailEmail(
+  tenantId: string,
+  input: { to: string; subject: string; body: string },
+): Promise<void> {
+  const token = await getGmailAccessToken(tenantId);
+  const raw = [
+    `To: ${input.to}`,
+    `Subject: ${input.subject}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    input.body,
+  ].join('\r\n');
+  const encoded = Buffer.from(raw)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ raw: encoded }),
+    signal: AbortSignal.timeout(GMAIL_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Gmail send failed: ${await res.text()}`);
+}
+
 export async function sendGmailReply(
   tenantId: string,
   input: { threadId: string; to: string; subject: string; body: string; inReplyTo?: string },
