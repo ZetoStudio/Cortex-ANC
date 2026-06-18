@@ -1,10 +1,20 @@
+# Cortex V1 — deploy ONLY this service (@cortex/web). Do not add worker services.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+watchPatterns = [
+  "apps/web/**",
+  "packages/**",
+  "scripts/**",
+  "Dockerfile",
+  "railway.toml",
+  "package.json",
+  "bun.lock",
+]
 
 [deploy]
+startCommand = "bun run start:web"
+preDeployCommand = "bun run db:migrate"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
-
-# Set in Railway dashboard: postdeploy = bun run db:migrate
