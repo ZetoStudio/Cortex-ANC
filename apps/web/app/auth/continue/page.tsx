@@ -1,23 +1,17 @@
-'use client';
+import { Suspense } from 'react';
 
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import RoleContinueClient from './role-continue-client';
 
 export default function AuthContinuePage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    fetch('/api/onboarding/connected-check')
-      .then((r) => r.json())
-      .then((d: { redirectTo?: string }) => {
-        router.replace(d.redirectTo ?? '/onboarding');
-      })
-      .catch(() => router.replace('/onboarding'));
-  }, [router]);
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black text-zinc-400">
-      Signing you in…
-    </div>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-black text-zinc-400">
+          Signing you in…
+        </div>
+      }
+    >
+      <RoleContinueClient />
+    </Suspense>
   );
 }

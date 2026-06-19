@@ -56,7 +56,7 @@ export default function LoginForm({
           return;
         }
       }
-      router.push(mode === 'signup' ? '/onboarding' : (callbackUrl ?? '/auth/continue'));
+      router.push('/auth/continue');
     } catch {
       setError('Authentication failed');
     } finally {
@@ -255,6 +255,14 @@ export default function LoginForm({
               </button>
             )}
           </>
+        )}
+
+        {showSocial && googleEnabled && (
+          <p className="mt-4 text-xs text-zinc-600">
+            For Google sign-in, open this page at{' '}
+            <code className="text-zinc-500">http://localhost:3000</code> (not your LAN IP) to avoid
+            OAuth errors.
+          </p>
         )}
 
         {!githubEnabled && mode === 'signin' && (

@@ -1,21 +1,31 @@
 'use client';
 
+import { canAccessPanel, canAccessPlatformAdmin } from '@cortex/auth';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const LINKS: { href: string; label: string; exact?: boolean }[] = [
+import { useCortexUser } from '@/hooks/use-cortex-user';
+
+const LINKS: { href: string; label: string; exact?: boolean; superAdminOnly?: boolean }[] = [
   { href: '/panel', label: 'Overview', exact: true },
-  { href: '/panel/admin', label: 'Admin' },
-  { href: '/panel/approvals', label: 'Employee Approvals' },
+  { href: '/panel/admin', label: 'Admin', superAdminOnly: true },
+  { href: '/panel/approvals', label: 'Employee Approvals', superAdminOnly: true },
 ];
 
 export function PanelSubNav() {
   const pathname = usePathname();
+  const { user } = useCortexUser();
+
+  const links = LINKS.filter(
+    (link) => !link.superAdminOnly || (user && canAccessPlatformAdmin(user.role)),
+  );
+
+  if (!user || !canAccessPanel(user.role)) return null;
 
   return (
     <div className="border-b border-[#2a2a2a] bg-[#0f0f0f] px-4 md:px-6">
       <nav className="flex flex-wrap gap-1 py-2">
-        {LINKS.map(({ href, label, exact }) => {
+        {links.map(({ href, label, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
             <Link

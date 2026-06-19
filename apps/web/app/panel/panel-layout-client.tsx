@@ -22,7 +22,7 @@ export function PanelLayoutClient({ children }: { children: React.ReactNode }) {
     return (
       <AppShell title="Panel" subtitle="Restricted" badge={<ProjectBadge tenantId={tenantId} />}>
         <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-          <p className="text-zinc-400">Super admin access required.</p>
+          <p className="text-zinc-400">Panel access required (super admin, CEO, or client).</p>
           <Link href="/executive-desk" className="text-sm text-[#14b8a6] hover:underline">
             Back to Executive Desk
           </Link>

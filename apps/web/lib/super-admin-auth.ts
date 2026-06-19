@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { canAccessPanel } from '@cortex/auth';
+import { canAccessPlatformAdmin } from '@cortex/auth';
 
 import { withAuth } from './auth';
 
@@ -11,7 +11,7 @@ type SuperAdminHandler = (
 
 export function withSuperAdminAuth(handler: SuperAdminHandler) {
   return withAuth(async (request, context) => {
-    if (!canAccessPanel(context.user.role)) {
+    if (!canAccessPlatformAdmin(context.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     return handler(request, context);

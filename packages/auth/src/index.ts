@@ -25,11 +25,22 @@ export function can(user: AuthUser | null, _action: string): boolean {
 }
 
 export function canAccessPanel(role: CortexRole): boolean {
+  return role === 'super_admin' || role === 'ceo' || role === 'client';
+}
+
+/** Platform-wide user list, approvals, and ops — super admin only. */
+export function canAccessPlatformAdmin(role: CortexRole): boolean {
   return role === 'super_admin';
 }
 
 export function canManageWorkspace(role: CortexRole): boolean {
   return role === 'admin' || role === 'ceo' || role === 'super_admin';
+}
+
+/** True when the user still needs to enter a role passkey after sign-in. */
+export function needsRolePasskey(email: string, storedRole?: string | null): boolean {
+  if (email.toLowerCase() === SUPER_ADMIN_EMAIL) return false;
+  return resolveRoleFromEmail(email, storedRole) === 'member';
 }
 
 export function canAccessHr(role: CortexRole): boolean {
@@ -64,3 +75,10 @@ export function sessionToAuthUser(session: {
     isPlatformAdmin: role === 'super_admin' || role === 'admin',
   };
 }
+
+export {
+  isExecutivePasskey,
+  redirectPathForRole,
+  resolveRoleFromPasskey,
+  type ExecutiveRolePick,
+} from './role-codes';

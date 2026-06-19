@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { needsRolePasskey } from '@cortex/auth';
+
 const PUBLIC = ['/', '/auth/login', '/auth/continue', '/auth/signup', '/sign-in', '/sign-up'];
 
 function isPublic(pathname: string): boolean {
@@ -19,13 +21,20 @@ export async function middleware(request: NextRequest) {
     },
   });
   const session = sessionRes.ok
-    ? ((await sessionRes.json()) as { user?: { tenantId?: string | null } })
+    ? ((await sessionRes.json()) as {
+        user?: { tenantId?: string | null; role?: string | null; email?: string | null };
+      })
     : null;
 
   if (!session?.user) {
     const login = new URL('/auth/login', request.url);
     login.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(login);
+  }
+
+  const email = session.user.email ?? '';
+  if (email && needsRolePasskey(email, session.user.role) && pathname !== '/auth/continue') {
+    return NextResponse.redirect(new URL('/auth/continue', request.url));
   }
 
   return NextResponse.next();

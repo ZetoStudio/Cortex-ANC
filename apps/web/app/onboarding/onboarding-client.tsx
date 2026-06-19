@@ -1,5 +1,6 @@
 'use client';
 
+import { canManageWorkspace } from '@cortex/auth';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -43,7 +44,14 @@ export default function OnboardingClient() {
   const [needsGitHubScope, setNeedsGitHubScope] = useState(false);
   const handledRedirect = useRef<string | null>(null);
 
-  const isAdmin = user?.role === 'admin';
+  const canOnboard = user ? canManageWorkspace(user.role) : false;
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (user?.role === 'member') {
+      router.replace('/auth/continue');
+    }
+  }, [isLoaded, user?.role, router]);
 
   function refreshStatus() {
     if (!tenantId) return;
@@ -147,14 +155,14 @@ export default function OnboardingClient() {
   }
 
   function connect(connectAs: string) {
-    if (!tenantId || !isAdmin) return;
+    if (!tenantId || !canOnboard) return;
     const returnUrl = `${window.location.origin}/connectors/oauth-complete`;
     const url = `/api/auth/connect/${encodeURIComponent(connectAs)}?return_url=${encodeURIComponent(returnUrl)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   async function connectNotion(resync = false) {
-    if (!tenantId || !isAdmin || connectingNotion) return;
+    if (!tenantId || !canOnboard || connectingNotion) return;
     setConnectError('');
     setConnectingNotion(true);
     try {
@@ -176,7 +184,7 @@ export default function OnboardingClient() {
   }
 
   async function resyncProvider(provider: string) {
-    if (!tenantId || !isAdmin) return;
+    if (!tenantId || !canOnboard) return;
     setConnectError('');
     try {
       const res = await fetch('/api/ingestion/resync', {
@@ -221,12 +229,17 @@ export default function OnboardingClient() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canOnboard) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
-        <p className="text-zinc-400">Only workspace admins can connect tools during onboarding.</p>
-        <Link href="/executive-desk" className="text-[#14b8a6] hover:underline">
-          Go to Executive Desk →
+        <p className="text-zinc-400">
+          Only workspace admins and CEOs can connect tools during onboarding.
+        </p>
+        <Link href="/auth/continue" className="text-[#14b8a6] hover:underline">
+          Enter your role code →
+        </Link>
+        <Link href="/executive-desk" className="text-sm text-zinc-500 hover:text-zinc-300">
+          Go to Executive Desk
         </Link>
       </div>
     );

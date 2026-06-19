@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { redirectPathForRole } from '@cortex/auth';
 import { withAuth } from '@/lib/auth';
 import {
   getGitHubIngestRepos,
@@ -21,39 +22,49 @@ async function needsGitHubScope(
 }
 
 export const GET = withAuth(async (_request, { tenant, user }) => {
-  if (user.role === 'hr') {
-    return NextResponse.json({ redirectTo: '/hr' });
+  if (user.role === 'super_admin') {
+    return NextResponse.json({ redirectTo: '/panel' });
   }
 
-  const r = await queryWithTenant<{ provider: string; status: string }>(
-    tenant,
-    `SELECT provider, status FROM connector_health
+  if (user.role === 'hr' || user.role === 'client' || user.role === 'employee') {
+    return NextResponse.json({
+      redirectTo: redirectPathForRole(user.role, user.employeeId),
+    });
+  }
+
+  if (user.role === 'ceo' || user.role === 'admin') {
+    const r = await queryWithTenant<{ provider: string; status: string }>(
+      tenant,
+      `SELECT provider, status FROM connector_health
      WHERE tenant_id = $1 AND provider IN ('google-workspace', 'github')`,
-    [tenant.tenantId],
-  );
-  const connected = new Set(
-    r.rows.filter((row) => row.status === 'connected').map((row) => row.provider),
-  );
-  const bothConnected = connected.has('google-workspace') && connected.has('github');
-  const githubConnected = connected.has('github');
+      [tenant.tenantId],
+    );
+    const connected = new Set(
+      r.rows.filter((row) => row.status === 'connected').map((row) => row.provider),
+    );
+    const bothConnected = connected.has('google-workspace') && connected.has('github');
+    const githubConnected = connected.has('github');
 
-  let scopePending = false;
-  if (githubConnected) {
-    scopePending = await needsGitHubScope(tenant);
+    let scopePending = false;
+    if (githubConnected) {
+      scopePending = await needsGitHubScope(tenant);
+    }
+
+    let redirectTo = '/onboarding';
+    if (bothConnected && scopePending) {
+      redirectTo = '/onboarding/github-repos';
+    } else if (bothConnected && !scopePending) {
+      redirectTo = '/executive-desk';
+    }
+
+    return NextResponse.json({
+      bothConnected,
+      google: connected.has('google-workspace'),
+      github: githubConnected,
+      needsGitHubScope: scopePending,
+      redirectTo,
+    });
   }
 
-  let redirectTo = '/onboarding';
-  if (bothConnected && scopePending) {
-    redirectTo = '/onboarding/github-repos';
-  } else if (bothConnected && !scopePending) {
-    redirectTo = '/executive-desk';
-  }
-
-  return NextResponse.json({
-    bothConnected,
-    google: connected.has('google-workspace'),
-    github: githubConnected,
-    needsGitHubScope: scopePending,
-    redirectTo,
-  });
+  return NextResponse.json({ redirectTo: '/auth/continue' });
 });

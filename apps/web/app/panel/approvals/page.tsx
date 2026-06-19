@@ -1,7 +1,32 @@
 'use client';
 
+import { canAccessPlatformAdmin } from '@cortex/auth';
+import Link from 'next/link';
+
 import { PanelApprovalsSection } from '@/components/panel/panel-approvals-section';
+import { useCortexUser } from '@/hooks/use-cortex-user';
 
 export default function PanelApprovalsPage() {
+  const { user, isLoaded } = useCortexUser();
+
+  if (!isLoaded) {
+    return (
+      <div className="flex h-full items-center justify-center text-zinc-500">
+        Loading approvals…
+      </div>
+    );
+  }
+
+  if (!user || !canAccessPlatformAdmin(user.role)) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-zinc-400">
+        <p>Platform admin access required.</p>
+        <Link href="/panel" className="text-sm text-[#14b8a6] hover:underline">
+          Back to Panel overview
+        </Link>
+      </div>
+    );
+  }
+
   return <PanelApprovalsSection />;
 }

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CortexLogo } from '@cortex/ui';
 
+import { canAccessPanel } from '@cortex/auth';
+
 import { authClient } from '@/lib/auth-client';
 import { useCortexUser } from '@/hooks/use-cortex-user';
 
@@ -12,7 +14,7 @@ const links = [
   { href: '/email-desk', label: 'Email' },
   { href: '/connectors', label: 'Connectors' },
   { href: '/approvals', label: 'Approvals' },
-  { href: '/panel', label: 'Panel' },
+  { href: '/panel', label: 'Panel', panelOnly: true },
   { href: '/graph', label: 'Graph' },
 ];
 
@@ -26,19 +28,21 @@ export function CortexNav() {
         <CortexLogo />
       </Link>
       <nav className="flex flex-wrap items-center gap-2 text-sm">
-        {links.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`rounded-lg px-3 py-1.5 transition ${
-              pathname === l.href
-                ? 'bg-white/10 text-white'
-                : 'text-[#94a3b8] hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            {l.label}
-          </Link>
-        ))}
+        {links
+          .filter((l) => !('panelOnly' in l && l.panelOnly) || (user && canAccessPanel(user.role)))
+          .map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`rounded-lg px-3 py-1.5 transition ${
+                pathname === l.href
+                  ? 'bg-white/10 text-white'
+                  : 'text-[#94a3b8] hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
       </nav>
       <div className="flex items-center gap-3 text-sm text-[#94a3b8]">
         {!isLoaded ? null : user ? (

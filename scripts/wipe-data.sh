@@ -11,7 +11,12 @@ NEO4J_PASS="${NEO4J_PASSWORD:-cortexneo4j}"
 
 echo "→ Truncating Postgres tenant data…"
 psql "$DB" <<'SQL'
-TRUNCATE write_requests, audit_logs, connector_health, tenant_onboarding,
+TRUNCATE hr_employee_approvals, hr_emergency_notices, hr_leave_requests, hr_payslips,
+  hr_payroll_runs, hr_plugin_connections, hr_employees,
+  employee_todos, employee_settings,
+  user_project_assignments, tenant_github_scope, tenant_projects,
+  connected_accounts, connector_credentials, ingestion_progress, embedding_cache,
+  write_requests, audit_logs, connector_health, tenant_onboarding,
   cortex_edges, cortex_nodes, cortex_documents, cortex_approvals,
   cortex_agent_interactions, qa_logs, improvement_suggestions
   RESTART IDENTITY CASCADE;

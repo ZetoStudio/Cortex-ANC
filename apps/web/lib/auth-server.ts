@@ -10,6 +10,18 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+const authBaseUrl =
+  process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+const trustedOrigins = [
+  authBaseUrl,
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean) ?? []),
+];
+
 const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
 if (githubAuthEnabled) {
   socialProviders.github = {
@@ -27,8 +39,8 @@ if (googleAuthEnabled) {
 export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET ?? 'cortex-dev-secret',
-  baseURL:
-    process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  baseURL: authBaseUrl,
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
   },

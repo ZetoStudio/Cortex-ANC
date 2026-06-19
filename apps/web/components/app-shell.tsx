@@ -1,23 +1,34 @@
 'use client';
 
+import { canAccessPanel } from '@cortex/auth';
+import { LayoutDashboard, LayoutPanelTop, LogOut, Mail, Plug } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { authClient } from '@/lib/auth-client';
-import { LayoutDashboard, LayoutPanelTop, LogOut, Mail, Plug } from 'lucide-react';
-
-import { canAccessPanel } from '@cortex/auth';
 
 import { useCortexUser } from '@/hooks/use-cortex-user';
+import { authClient } from '@/lib/auth-client';
 
 import { IngestionStatusBar } from './ingestion-status-bar';
 import { ThemeToggle } from './theme-toggle';
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  show?: (role: string) => boolean;
+};
+
+const NAV: NavItem[] = [
   { href: '/executive-desk', label: 'Executive Desk', icon: LayoutDashboard },
   { href: '/email-desk', label: 'Email Desk', icon: Mail },
   { href: '/connectors', label: 'Connectors', icon: Plug },
-  { href: '/panel', label: 'Panel', icon: LayoutPanelTop },
-] as const;
+  {
+    href: '/panel',
+    label: 'Panel',
+    icon: LayoutPanelTop,
+    show: (role) => canAccessPanel(role as Parameters<typeof canAccessPanel>[0]),
+  },
+];
 
 export function AppShell({
   title,
@@ -35,6 +46,8 @@ export function AppShell({
   const pathname = usePathname();
   const { user } = useCortexUser();
 
+  const visibleNav = NAV.filter((item) => !item.show || (user && item.show(user.role)));
+
   return (
     <div className="app-shell flex h-screen flex-col bg-[#0a0a0a]">
       <IngestionStatusBar />
@@ -47,10 +60,10 @@ export function AppShell({
             <p className="mt-1 text-xs text-zinc-500">Single Brain OS</p>
           </div>
           <nav className="flex-1 space-y-1 p-3">
-            {NAV.filter(
-              (item) => item.href !== '/panel' || (user && canAccessPanel(user.role)),
-            ).map(({ href, label, icon: Icon }) => {
-              const active = pathname === href || pathname.startsWith(`${href}/`);
+            {visibleNav.map(({ href, label, icon: Icon }) => {
+              const active =
+                pathname === href ||
+                (href === '/panel' ? pathname === '/panel' : pathname.startsWith(`${href}/`));
               return (
                 <Link
                   key={href}
