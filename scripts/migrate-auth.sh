@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
-# Create Better Auth tables in Postgres (Kysely adapter).
+# Apply Better Auth tables via SQL (no CLI — avoids better-sqlite3 on Railway).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
-
 export DATABASE_URL="${DATABASE_URL:-postgresql://cortex:cortex@localhost:5434/cortex}"
 
-echo "→ Migrating Better Auth schema…"
-cd apps/web
-DATABASE_URL="$DATABASE_URL" bunx @better-auth/cli@latest migrate --config ./lib/auth-server.ts --yes
-
+echo "→ Better Auth schema (SQL)…"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/007b_better_auth.sql
 echo "✅ Better Auth migration complete"

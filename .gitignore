@@ -4,6 +4,7 @@
 .env
 .env.local
 .env.*.local
+.env.deployment
 
 # Activepieces vendor (not part of Cortex repo)
 activepieces-main/
