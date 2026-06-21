@@ -10,6 +10,7 @@ watchPatterns = [
   "railway.toml",
   "package.json",
   "bun.lock",
+  "tsconfig.base.json",
 ]
 
 [deploy]
