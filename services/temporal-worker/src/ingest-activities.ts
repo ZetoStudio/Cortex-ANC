@@ -116,10 +116,6 @@ async function updateOnboarding(tenantId: string, patch: Record<string, unknown>
   await pool.end();
 }
 
-async function indexIngestDoc(input: IngestDocInput): Promise<number> {
-  return indexIngestDocs([input], chunkText);
-}
-
 export async function resolveIngestProvidersActivity(tenantId: string): Promise<string[]> {
   const connected = await listConnectedProviders(tenantId);
   const providers: string[] = [];
