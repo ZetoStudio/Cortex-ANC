@@ -24,9 +24,7 @@ export function ChatMessage({
   }
 
   return (
-    <div className={cn('animate-fade-in flex items-start justify-start gap-3', className)}>
-      {children}
-    </div>
+    <div className={cn('animate-fade-in flex w-full items-start gap-3', className)}>{children}</div>
   );
 }
 

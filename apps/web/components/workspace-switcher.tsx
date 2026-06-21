@@ -29,12 +29,13 @@ export function WorkspaceSwitcher() {
   }
 
   const label =
-    activeProject?.name ?? (projects.length === 1 ? projects[0]?.name : 'All workspaces');
+    activeProject?.name ??
+    (projects.length === 1 ? projects[0]?.name : projects.length ? 'All workspaces' : 'Company');
 
   if (!canSwitch) {
     return (
-      <span className="border border-[#14b8a6]/30 bg-[#14b8a6]/10 px-3 py-1 text-xs font-medium text-[#14b8a6]">
-        {label ?? 'Workspace'}
+      <span className="inline-flex max-w-[10rem] truncate border border-[#14b8a6]/30 bg-[#14b8a6]/10 px-3 py-1 text-xs font-medium text-[#14b8a6] sm:max-w-[14rem]">
+        {label}
       </span>
     );
   }

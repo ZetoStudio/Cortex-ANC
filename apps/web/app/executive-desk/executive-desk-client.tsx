@@ -13,8 +13,7 @@ import {
 } from '@cortex/ui';
 
 import { AppShell } from '@/components/app-shell';
-import { SyncAllButton } from '@/components/sync-all-button';
-import { WorkspaceSwitcher } from '@/components/workspace-switcher';
+import { DeskToolbar } from '@/components/desk-toolbar';
 import { useActiveWorkspace } from '@/hooks/use-active-workspace';
 import { useCortexUser } from '@/hooks/use-cortex-user';
 
@@ -32,7 +31,7 @@ export function ExecutiveDeskPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Welcome${user?.name ? `, ${user.name.split(' ')[0]}` : ''}. Ask about project status, blockers, or team assignments — I'll cite sources from your connected tools.`,
+      content: `Welcome${user?.name ? `, ${user.name.split(' ')[0]}` : ''}. Ask about emails, GitHub, HR, client workspaces, or anything connected — I'll cite sources.`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -106,19 +105,14 @@ export function ExecutiveDeskPage() {
     <AppShell
       title={deskTitle}
       subtitle={deskSubtitle}
-      badge={
-        <div className="flex shrink-0 items-center gap-2">
-          <SyncAllButton />
-          <WorkspaceSwitcher />
-        </div>
-      }
+      badge={<DeskToolbar />}
       footer={
         <ChatInput
           value={input}
           onValueChange={setInput}
           onSubmit={handleAsk}
           isLoading={loading}
-          placeholder="What's my latest email about? Or ask about GitHub repos, meetings, drive files…"
+          placeholder="Ask about status, emails, repos, HR, or blockers…"
           variant="dark"
         />
       }
@@ -129,7 +123,7 @@ export function ExecutiveDeskPage() {
             {message.role === 'assistant' && (
               <ChatMessageAvatar fallback="CX" variant="cortex" theme="dark" />
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 max-w-3xl flex-1">
               <ChatMessageContent
                 markdown={message.role === 'assistant'}
                 role={message.role}

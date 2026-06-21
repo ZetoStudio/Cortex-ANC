@@ -70,10 +70,10 @@ export function AppShell({
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors duration-200 ${
+                  className={`flex items-center gap-2.5 border-l-2 px-3 py-2.5 text-sm transition-colors duration-200 ${
                     active
-                      ? 'border-l-2 border-[#14b8a6] bg-[#14b8a6]/10 font-medium text-[#14b8a6]'
-                      : 'border-l-2 border-transparent text-zinc-400 hover:bg-[#1a1a1a] hover:text-white'
+                      ? 'border-[#14b8a6] bg-[#14b8a6]/10 font-medium text-[#14b8a6]'
+                      : 'border-transparent text-zinc-400 hover:bg-[#1a1a1a] hover:text-white'
                   }`}
                 >
                   <Icon className="size-4" />
@@ -103,18 +103,20 @@ export function AppShell({
           </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-[#2a2a2a] bg-[#0f0f0f] px-6 py-4">
-            <div>
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2a2a2a] bg-[#0f0f0f] px-4 py-4 sm:px-6">
+            <div className="min-w-0 flex-1">
               <h1 className="font-sans text-xl font-semibold tracking-tight text-white">{title}</h1>
               {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               {badge}
               <ThemeToggle />
             </div>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden bg-[#0a0a0a]">{children}</div>
-          {footer && <div className="border-t border-[#2a2a2a] bg-[#0f0f0f] p-4">{footer}</div>}
+          {footer && (
+            <div className="border-t border-[#2a2a2a] bg-[#0f0f0f] p-3 sm:p-4">{footer}</div>
+          )}
         </div>
       </div>
     </div>
