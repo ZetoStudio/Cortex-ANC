@@ -12,21 +12,37 @@ export type WorkspaceProject = {
 };
 
 const STORAGE_KEY = 'cortex-active-workspace-id';
+export const TENANT_WORKSPACE_RENAMED_EVENT = 'cortex:tenant-workspace-renamed';
 
 export function useActiveWorkspace() {
   const { projectIds } = useCortexUser();
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveIdState] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [projectsRes, workspaceRes] = await Promise.all([
+      fetch('/api/projects'),
+      fetch('/api/panel/workspace'),
+    ]);
+
+    if (projectsRes.ok) {
+      const data = (await projectsRes.json()) as { projects?: WorkspaceProject[] };
+      setProjects(data.projects ?? []);
+    }
+
+    if (workspaceRes.ok) {
+      const data = (await workspaceRes.json()) as { name?: string };
+      setCompanyName(data.name?.trim() || null);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/projects');
-        if (!res.ok) return;
-        const data = (await res.json()) as { projects?: WorkspaceProject[] };
-        if (!cancelled) setProjects(data.projects ?? []);
+        await refresh();
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -34,7 +50,15 @@ export function useActiveWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    const onRenamed = () => {
+      void refresh();
+    };
+    window.addEventListener(TENANT_WORKSPACE_RENAMED_EVENT, onRenamed);
+    return () => window.removeEventListener(TENANT_WORKSPACE_RENAMED_EVENT, onRenamed);
+  }, [refresh]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -69,6 +93,7 @@ export function useActiveWorkspace() {
 
   return {
     projects,
+    companyName,
     loading,
     activeId,
     activeProject,

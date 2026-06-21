@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useActiveWorkspace } from '@/hooks/use-active-workspace';
 
 export function WorkspaceSwitcher() {
-  const { projects, loading, activeId, activeProject, setActiveId, canSwitch } =
+  const { projects, companyName, loading, activeId, activeProject, setActiveId, canSwitch } =
     useActiveWorkspace();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -28,9 +28,11 @@ export function WorkspaceSwitcher() {
     );
   }
 
+  const companyLabel = companyName ?? 'Company';
+
   const label =
     activeProject?.name ??
-    (projects.length === 1 ? projects[0]?.name : projects.length ? 'All workspaces' : 'Company');
+    (projects.length === 1 ? projects[0]?.name : projects.length ? companyLabel : companyLabel);
 
   if (!canSwitch) {
     return (
@@ -45,9 +47,9 @@ export function WorkspaceSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 border border-[#14b8a6]/30 bg-[#14b8a6]/10 px-3 py-1 text-xs font-medium text-[#14b8a6] hover:bg-[#14b8a6]/15"
+        className="inline-flex max-w-[10rem] items-center gap-1.5 truncate border border-[#14b8a6]/30 bg-[#14b8a6]/10 px-3 py-1 text-xs font-medium text-[#14b8a6] hover:bg-[#14b8a6]/15 sm:max-w-[14rem]"
       >
-        {activeId ? label : 'All workspaces'}
+        {activeId ? label : companyLabel}
         <ChevronDown className={`size-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -62,7 +64,7 @@ export function WorkspaceSwitcher() {
               !activeId ? 'text-[#14b8a6]' : 'text-zinc-300'
             }`}
           >
-            All workspaces
+            {companyLabel} (all)
           </button>
           {projects.map((p) => (
             <button

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
 import { withAuth } from '@/lib/auth';
-import { isOrgLead, listTenantProjects } from '@cortex/shared';
+import { isOrgLead, listTenantProjects, queryWithTenant } from '@cortex/shared';
 import { canAccessPanel } from '@cortex/auth';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -77,8 +77,16 @@ export const GET = withAuth(
       clients: clientsByProject.get(project.id) ?? [],
     }));
 
+    const tenantRow = await queryWithTenant<{ name: string }>(
+      tenant,
+      `SELECT name FROM tenants WHERE id = $1 LIMIT 1`,
+      [tenant.tenantId],
+    );
+    const companyName = tenantRow.rows[0]?.name ?? null;
+
     return NextResponse.json({
       isOrgView: isOrgLead(user.role),
+      companyName,
       workspaces,
       unassignedClients: isOrgLead(user.role) ? unassignedClients : [],
       totals: {

@@ -5,6 +5,7 @@ import { Building2, FolderGit2, Loader2, UserPlus, Users, X } from 'lucide-react
 import { useCallback, useEffect, useState } from 'react';
 
 import { useCortexUser } from '@/hooks/use-cortex-user';
+import { TENANT_WORKSPACE_RENAMED_EVENT } from '@/hooks/use-active-workspace';
 
 type WorkspaceClient = { id: string; email: string; name: string | null };
 
@@ -19,6 +20,7 @@ type WorkspaceRow = {
 
 type Overview = {
   isOrgView: boolean;
+  companyName?: string | null;
   workspaces: WorkspaceRow[];
   unassignedClients: WorkspaceClient[];
   totals: {
@@ -60,6 +62,14 @@ export function WorkspacesOverviewPanel() {
     return () => {
       cancelled = true;
     };
+  }, [refresh]);
+
+  useEffect(() => {
+    const onRenamed = () => {
+      void refresh();
+    };
+    window.addEventListener(TENANT_WORKSPACE_RENAMED_EVENT, onRenamed);
+    return () => window.removeEventListener(TENANT_WORKSPACE_RENAMED_EVENT, onRenamed);
   }, [refresh]);
 
   async function mutateAssignment(
@@ -109,7 +119,11 @@ export function WorkspacesOverviewPanel() {
         <div className="flex items-center gap-2">
           <Building2 className="size-3 text-[#14b8a6]" />
           <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-            {data.isOrgView ? 'Client workspaces' : 'Your workspace'}
+            {data.isOrgView
+              ? data.companyName
+                ? `${data.companyName} · client workspaces`
+                : 'Client workspaces'
+              : 'Your workspace'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[10px] text-zinc-500">

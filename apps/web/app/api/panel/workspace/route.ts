@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { canManageWorkspace } from '@cortex/auth';
 
 import { withAuth } from '@/lib/auth';
+import { indexHrTenantFromContext } from '@/lib/index-hr-tenant';
 import { queryWithTenant } from '@cortex/shared';
 
 export const GET = withAuth(
@@ -32,11 +33,12 @@ export const PATCH = withAuth(
       return NextResponse.json({ error: 'Workspace name is required' }, { status: 400 });
     }
 
-    await queryWithTenant(
-      tenant,
-      `UPDATE tenants SET name = $2, updated_at = NOW() WHERE id = $1`,
-      [tenant.tenantId, name],
-    );
+    await queryWithTenant(tenant, `UPDATE tenants SET name = $2 WHERE id = $1`, [
+      tenant.tenantId,
+      name,
+    ]);
+
+    await indexHrTenantFromContext(tenant);
 
     return NextResponse.json({ ok: true, name });
   },

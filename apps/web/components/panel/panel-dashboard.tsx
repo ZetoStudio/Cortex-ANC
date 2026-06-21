@@ -24,6 +24,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { ClientProjectsPanel } from '@/components/panel/github-scope-panel';
 import { WorkspacesOverviewPanel } from '@/components/panel/workspaces-overview-panel';
 import { GradientDivider, PanelDashboardSkeleton, StatusDot } from '@/components/design-system';
+import { TENANT_WORKSPACE_RENAMED_EVENT } from '@/hooks/use-active-workspace';
 import { useCortexUser } from '@/hooks/use-cortex-user';
 import { canManageWorkspace, canReviewApprovals } from '@cortex/auth';
 
@@ -477,6 +478,7 @@ export function PanelDashboard({
   const [workspaceName, setWorkspaceName] = useState('Workspace');
   const [workspaceDraft, setWorkspaceDraft] = useState('Workspace');
   const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [workspaceSaveError, setWorkspaceSaveError] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>(initialTab ?? 'connections');
   const refresh = useCallback(async () => {
@@ -560,14 +562,22 @@ export function PanelDashboard({
     const next = workspaceDraft.trim();
     if (!next || next === workspaceName) return;
     setSavingWorkspace(true);
+    setWorkspaceSaveError('');
     try {
       const res = await fetch('/api/panel/workspace', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: next }),
       });
-      if (!res.ok) return;
-      setWorkspaceName(next);
+      const data = (await res.json()) as { name?: string; error?: string };
+      if (!res.ok) {
+        setWorkspaceSaveError(data.error ?? 'Could not save workspace name');
+        return;
+      }
+      const saved = data.name?.trim() || next;
+      setWorkspaceName(saved);
+      setWorkspaceDraft(saved);
+      window.dispatchEvent(new CustomEvent(TENANT_WORKSPACE_RENAMED_EVENT));
     } finally {
       setSavingWorkspace(false);
     }
@@ -638,6 +648,9 @@ export function PanelDashboard({
                         {savingWorkspace ? '…' : 'Save'}
                       </button>
                     </div>
+                    {workspaceSaveError ? (
+                      <p className="mt-1 text-[10px] text-red-400">{workspaceSaveError}</p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
