@@ -3,11 +3,16 @@ import type { CortexRole } from './index';
 const EXECUTIVE_CODE = 'Zeto';
 const HR_CODE = 'Zetohr';
 const EMPLOYEE_CODE = 'ZetoEmployee';
+const SUPERADMIN_CODE = 'Superadmin';
 
 export type ExecutiveRolePick = 'ceo' | 'admin' | 'client';
 
 export function isExecutivePasskey(code: string): boolean {
   return code.trim().toLowerCase() === EXECUTIVE_CODE.toLowerCase();
+}
+
+export function isSuperAdminPasskey(code: string): boolean {
+  return code.trim().toLowerCase() === SUPERADMIN_CODE.toLowerCase();
 }
 
 /** Map a role passkey to a Cortex role. Executive code requires a pick (ceo/admin/client). */
@@ -18,6 +23,7 @@ export function resolveRoleFromPasskey(
   const trimmed = code.trim();
   if (!trimmed) return null;
 
+  if (isSuperAdminPasskey(trimmed)) return 'super_admin';
   if (trimmed.toLowerCase() === EXECUTIVE_CODE.toLowerCase()) {
     return executivePick ?? null;
   }
@@ -29,7 +35,7 @@ export function resolveRoleFromPasskey(
 export function redirectPathForRole(role: CortexRole, employeeId: string | null): string {
   switch (role) {
     case 'super_admin':
-      return '/panel';
+      return '/onboarding';
     case 'hr':
       return '/hr';
     case 'employee':

@@ -1,8 +1,8 @@
 'use client';
 
-import { isExecutivePasskey, SUPER_ADMIN_EMAIL } from '@cortex/auth';
+import { isExecutivePasskey, isSuperAdminPasskey } from '@cortex/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { authClient } from '@/lib/auth-client';
 import { useCortexUser } from '@/hooks/use-cortex-user';
@@ -24,27 +24,28 @@ export default function RoleContinueClient() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isSuperAdmin = isLoaded && user?.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-
-  const finishRedirect = useCallback(async () => {
-    const res = await fetch('/api/onboarding/connected-check');
-    const data = (await res.json()) as { redirectTo?: string };
-    window.location.href = data.redirectTo ?? '/onboarding';
-  }, []);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!user) {
-      router.replace('/auth/login');
-      return;
-    }
-    if (isSuperAdmin) {
-      void finishRedirect();
-    }
-  }, [isLoaded, user, router, isSuperAdmin, finishRedirect]);
-
   const showExecutivePick = isExecutivePasskey(code);
   const employeeMissing = searchParams.get('employee') === 'missing';
+
+  useEffect(() => {
+    if (isLoaded && !user) router.replace('/auth/login');
+  }, [isLoaded, user, router]);
+
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-zinc-400">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-zinc-400">
+        Redirecting…
+      </div>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,21 +80,14 @@ export default function RoleContinueClient() {
     }
   }
 
-  if (!isLoaded || isSuperAdmin) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-zinc-400">
-        Signing you in…
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4">
       <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-950 p-8 shadow-xl">
         <h1 className="text-xl font-semibold text-white">Enter your role code</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Signed in as <span className="text-zinc-300">{user?.email}</span>. Enter the code your
-          team shared to open the right workspace.
+          Signed in as <span className="text-zinc-300">{user.email}</span>. Enter the code your team
+          shared — e.g. <span className="text-zinc-300">Superadmin</span> for platform admin, then
+          connect Google/GitHub in onboarding.
         </p>
 
         {employeeMissing ? (
@@ -114,7 +108,7 @@ export default function RoleContinueClient() {
               autoComplete="off"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Enter code"
+              placeholder="Superadmin, Zeto, Zetohr…"
               className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-white placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
               required
             />
@@ -140,6 +134,12 @@ export default function RoleContinueClient() {
                 ))}
               </div>
             </div>
+          ) : null}
+
+          {isSuperAdminPasskey(code) ? (
+            <p className="text-xs text-zinc-500">
+              Platform admin — you&apos;ll connect integrations in onboarding next.
+            </p>
           ) : null}
 
           {error ? <p className="text-sm text-red-400">{error}</p> : null}

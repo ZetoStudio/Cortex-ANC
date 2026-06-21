@@ -1,7 +1,4 @@
-import { SUPER_ADMIN_EMAIL } from '@cortex/auth';
-import type { HrEmployeeApproval } from '@cortex/shared';
-
-import { sendGmailEmail } from './gmail';
+const PLATFORM_NOTIFY_EMAIL = process.env.PLATFORM_NOTIFY_EMAIL?.trim() || 'aneeshg@zeto.studio';
 
 export async function notifySuperAdminEmployeeApproval(
   tenantId: string,
@@ -26,7 +23,7 @@ export async function notifySuperAdminEmployeeApproval(
 
   try {
     await sendGmailEmail(tenantId, {
-      to: SUPER_ADMIN_EMAIL,
+      to: PLATFORM_NOTIFY_EMAIL,
       subject: 'New Employee Approval Request',
       body,
     });
@@ -39,7 +36,7 @@ export async function notifySuperAdminEmployeeApproval(
         event: 'approval_email_failed',
         tenantId,
         approvalId: approval.id,
-        to: SUPER_ADMIN_EMAIL,
+        to: PLATFORM_NOTIFY_EMAIL,
         error: message,
       }),
     );

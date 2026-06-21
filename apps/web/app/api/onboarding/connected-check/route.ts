@@ -23,7 +23,7 @@ async function needsGitHubScope(
 
 export const GET = withAuth(async (_request, { tenant, user }) => {
   if (user.role === 'super_admin') {
-    return NextResponse.json({ redirectTo: '/panel' });
+    return NextResponse.json({ redirectTo: '/onboarding' });
   }
 
   if (user.role === 'hr' || user.role === 'client' || user.role === 'employee') {

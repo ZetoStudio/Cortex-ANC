@@ -1,11 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import {
-  redirectPathForRole,
-  resolveRoleFromEmail,
-  resolveRoleFromPasskey,
-  type ExecutiveRolePick,
-} from '@cortex/auth';
+import { redirectPathForRole, resolveRoleFromPasskey, type ExecutiveRolePick } from '@cortex/auth';
 import { queryWithTenant } from '@cortex/shared';
 import { Pool } from 'pg';
 
@@ -19,10 +14,6 @@ type AssignRoleBody = {
 };
 
 export const POST = withAuth(async (request, { user, tenant }) => {
-  if (resolveRoleFromEmail(user.email) === 'super_admin') {
-    return NextResponse.json({ error: 'Super admin does not use role codes' }, { status: 400 });
-  }
-
   let body: AssignRoleBody;
   try {
     body = (await request.json()) as AssignRoleBody;

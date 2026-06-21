@@ -1,5 +1,3 @@
-export const SUPER_ADMIN_EMAIL = 'aneeshg@zeto.studio';
-
 export type CortexRole = 'super_admin' | 'admin' | 'ceo' | 'client' | 'hr' | 'employee' | 'member';
 
 export type AuthUser = {
@@ -13,8 +11,7 @@ export type AuthUser = {
   isPlatformAdmin: boolean;
 };
 
-export function resolveRoleFromEmail(email: string, storedRole?: string | null): CortexRole {
-  if (email.toLowerCase() === SUPER_ADMIN_EMAIL) return 'super_admin';
+export function resolveRoleFromEmail(_email: string, storedRole?: string | null): CortexRole {
   if (storedRole) return storedRole as CortexRole;
   return 'member';
 }
@@ -38,9 +35,8 @@ export function canManageWorkspace(role: CortexRole): boolean {
 }
 
 /** True when the user still needs to enter a role passkey after sign-in. */
-export function needsRolePasskey(email: string, storedRole?: string | null): boolean {
-  if (email.toLowerCase() === SUPER_ADMIN_EMAIL) return false;
-  return resolveRoleFromEmail(email, storedRole) === 'member';
+export function needsRolePasskey(_email: string, storedRole?: string | null): boolean {
+  return resolveRoleFromEmail('', storedRole) === 'member';
 }
 
 export function canAccessHr(role: CortexRole): boolean {
@@ -78,6 +74,7 @@ export function sessionToAuthUser(session: {
 
 export {
   isExecutivePasskey,
+  isSuperAdminPasskey,
   redirectPathForRole,
   resolveRoleFromPasskey,
   type ExecutiveRolePick,
