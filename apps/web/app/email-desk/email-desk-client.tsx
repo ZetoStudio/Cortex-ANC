@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Mail, Reply, Send } from 'lucide-react';
 import { type SourceCitationProps } from '@cortex/ui';
 
@@ -39,11 +39,36 @@ function formatDate(raw: string): string {
   }
 }
 
+const INBOX_STORAGE_KEY = 'cortex-email-inbox-v1';
+
+function readCachedInbox(): ThreadSummary[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(INBOX_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; threads: ThreadSummary[] };
+    if (Date.now() - parsed.at > 60_000) return null;
+    return parsed.threads;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedInbox(threads: ThreadSummary[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(INBOX_STORAGE_KEY, JSON.stringify({ at: Date.now(), threads }));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export function EmailDeskPage() {
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [threads, setThreads] = useState<ThreadSummary[]>(() => readCachedInbox() ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [thread, setThread] = useState<ThreadDetail | null>(null);
-  const [loadingInbox, setLoadingInbox] = useState(true);
+  const [loadingInbox, setLoadingInbox] = useState(() => !readCachedInbox()?.length);
+  const [hydratingInbox, setHydratingInbox] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [inboxError, setInboxError] = useState('');
   const [draft, setDraft] = useState('');
@@ -51,25 +76,55 @@ export function EmailDeskPage() {
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendOk, setSendOk] = useState(false);
+  const hadCachedInbox = useRef(Boolean(readCachedInbox()?.length));
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+
+    async function loadQuick() {
+      const res = await fetch('/api/email/inbox?quick=1&limit=30');
+      const data = (await res.json()) as ThreadSummary[] & { error?: string };
+      if (cancelled) return;
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load inbox');
+      const quick = Array.isArray(data) ? data : [];
+      setThreads(quick);
+      setLoadingInbox(false);
+      return quick;
+    }
+
+    async function loadFull() {
+      setHydratingInbox(true);
       try {
-        const res = await fetch('/api/email/inbox');
+        const res = await fetch('/api/email/inbox?limit=30');
         const data = (await res.json()) as ThreadSummary[] & { error?: string };
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error ?? 'Failed to load inbox');
-        setThreads(Array.isArray(data) ? data : []);
-      } catch (e) {
-        if (!cancelled) {
-          setInboxError(e instanceof Error ? e.message : 'Failed to load inbox');
-          setThreads([]);
-        }
+        const full = Array.isArray(data) ? data : [];
+        setThreads(full);
+        writeCachedInbox(full);
       } finally {
-        if (!cancelled) setLoadingInbox(false);
+        if (!cancelled) setHydratingInbox(false);
+      }
+    }
+
+    void (async () => {
+      let hasRows = hadCachedInbox.current;
+      try {
+        if (!hasRows) {
+          await loadQuick();
+          hasRows = true;
+        } else {
+          setLoadingInbox(false);
+        }
+        await loadFull();
+      } catch (e) {
+        if (!cancelled && !hasRows) {
+          setInboxError(e instanceof Error ? e.message : 'Failed to load inbox');
+          setLoadingInbox(false);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -159,6 +214,11 @@ export function EmailDeskPage() {
           <div className="px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Inbox
+              {hydratingInbox && (
+                <span className="ml-2 normal-case tracking-normal text-muted-foreground/60">
+                  Updating…
+                </span>
+              )}
             </p>
           </div>
           <GradientDivider />
@@ -196,14 +256,20 @@ export function EmailDeskPage() {
                       {t.unread && <span className="status-dot-live mt-1.5 size-2 shrink-0" />}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
-                          {t.from.replace(/<.*>/, '').trim() || t.from}
+                          {t.from
+                            ? t.from.replace(/<.*>/, '').trim() || t.from
+                            : hydratingInbox
+                              ? '…'
+                              : 'Unknown sender'}
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">{t.subject}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {t.subject || (hydratingInbox ? 'Loading subject…' : '(no subject)')}
+                        </p>
                         <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
                           {t.snippet}
                         </p>
                         <p className="mt-1 text-[10px] text-muted-foreground/60">
-                          {formatDate(t.date)}
+                          {t.date ? formatDate(t.date) : hydratingInbox ? '…' : ''}
                         </p>
                       </div>
                     </div>
