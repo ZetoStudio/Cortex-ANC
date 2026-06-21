@@ -9,6 +9,9 @@ import {
 
 import LoginForm from './login-form';
 
+/** OAuth env vars are set at Railway runtime, not Docker build — must not static-render. */
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
   return (
     <Suspense

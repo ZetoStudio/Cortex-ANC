@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { authClient } from '@/lib/auth-client';
 
@@ -11,6 +11,11 @@ type LoginFormProps = {
   googleEnabled?: boolean;
   hrDevEnabled?: boolean;
   employeeDevEnabled?: boolean;
+};
+
+type SignInConfig = {
+  github: boolean;
+  google: boolean;
 };
 
 export default function LoginForm({
@@ -28,6 +33,19 @@ export default function LoginForm({
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [oauth, setOauth] = useState<SignInConfig>({
+    github: githubEnabled,
+    google: googleEnabled,
+  });
+
+  useEffect(() => {
+    fetch('/api/auth/sign-in-config', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: SignInConfig | null) => {
+        if (data) setOauth(data);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,14 +117,10 @@ export default function LoginForm({
   }
 
   async function handleSocial(provider: 'github' | 'google') {
-    const enabled = provider === 'github' ? githubEnabled : googleEnabled;
+    const enabled = provider === 'github' ? oauth.github : oauth.google;
     if (!enabled) {
-      const vars =
-        provider === 'github'
-          ? 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET'
-          : 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET';
       setError(
-        `${provider === 'github' ? 'GitHub' : 'Google'} sign-in is not configured. Add ${vars} to .env and restart.`,
+        `${provider === 'github' ? 'GitHub' : 'Google'} sign-in is not configured on this server.`,
       );
       return;
     }
@@ -127,7 +141,7 @@ export default function LoginForm({
     }
   }
 
-  const showSocial = githubEnabled || googleEnabled;
+  const showSocial = oauth.github || oauth.google;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
@@ -139,12 +153,48 @@ export default function LoginForm({
           {mode === 'signin' ? 'Sign in' : 'Create workspace'}
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          {mode === 'signin'
-            ? 'Sign in with email, or use GitHub if configured'
-            : 'Create your workspace with email — we set everything up automatically'}
+          {showSocial
+            ? 'Continue with Google or GitHub — then connect repos and tools in onboarding.'
+            : 'Sign in with email to access your workspace.'}
         </p>
 
-        <form onSubmit={handleEmailSubmit} className="mt-8 space-y-4">
+        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+
+        {showSocial && (
+          <div className="mt-8 space-y-3">
+            {oauth.google && (
+              <button
+                type="button"
+                onClick={() => handleSocial('google')}
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 border border-zinc-700 bg-white px-4 py-3 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 disabled:opacity-50"
+              >
+                Continue with Google
+              </button>
+            )}
+
+            {oauth.github && (
+              <button
+                type="button"
+                onClick={() => handleSocial('github')}
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 border border-zinc-700 bg-black px-4 py-3 text-sm text-white transition-colors hover:border-zinc-500 disabled:opacity-50"
+              >
+                Continue with GitHub
+              </button>
+            )}
+          </div>
+        )}
+
+        {showSocial && (
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <span className="text-xs text-zinc-600">or use email</span>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+        )}
+
+        <form onSubmit={handleEmailSubmit} className={showSocial ? 'space-y-4' : 'mt-8 space-y-4'}>
           {mode === 'signup' && (
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-zinc-400">
@@ -189,43 +239,14 @@ export default function LoginForm({
               className="input-dark mt-1.5"
             />
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create workspace'}
+            {loading
+              ? 'Please wait…'
+              : mode === 'signin'
+                ? 'Sign in with email'
+                : 'Create with email'}
           </button>
         </form>
-
-        {showSocial && (
-          <>
-            <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <span className="text-xs text-zinc-600">or</span>
-              <div className="h-px flex-1 bg-zinc-800" />
-            </div>
-
-            {githubEnabled && (
-              <button
-                type="button"
-                onClick={() => handleSocial('github')}
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 border border-zinc-700 bg-black px-4 py-3 text-sm text-white transition-colors hover:border-zinc-500"
-              >
-                Continue with GitHub
-              </button>
-            )}
-
-            {googleEnabled && (
-              <button
-                type="button"
-                onClick={() => handleSocial('google')}
-                disabled={loading}
-                className={`flex w-full items-center justify-center gap-2 border border-zinc-700 bg-black px-4 py-3 text-sm text-white transition-colors hover:border-zinc-500${githubEnabled ? ' mt-3' : ''}`}
-              >
-                Continue with Google
-              </button>
-            )}
-          </>
-        )}
 
         {(hrDevEnabled || employeeDevEnabled) && mode === 'signin' && (
           <>
@@ -255,24 +276,6 @@ export default function LoginForm({
               </button>
             )}
           </>
-        )}
-
-        {showSocial && googleEnabled && (
-          <p className="mt-4 text-xs text-zinc-600">
-            For Google sign-in, open this page at{' '}
-            <code className="text-zinc-500">http://localhost:3000</code> (not your LAN IP) to avoid
-            OAuth errors.
-          </p>
-        )}
-
-        {!githubEnabled && mode === 'signin' && (
-          <p className="mt-4 text-xs text-zinc-600">
-            Want GitHub login? Add <code className="text-zinc-500">GITHUB_CLIENT_ID</code> and{' '}
-            <code className="text-zinc-500">GITHUB_CLIENT_SECRET</code> to{' '}
-            <code className="text-zinc-500">.env</code> (OAuth App callback:{' '}
-            <code className="text-zinc-500">http://localhost:3000/api/auth/callback/github</code>
-            ).
-          </p>
         )}
 
         <button

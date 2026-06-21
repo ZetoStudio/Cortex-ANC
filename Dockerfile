@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
 
 ENV RAILWAY_ENV=true
 ENV NEXT_PUBLIC_SLIM_DEPLOY=true
+# Railway injects these at build — bake prod URL into client bundle when present.
+ARG NEXT_PUBLIC_APP_URL
+ARG BETTER_AUTH_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV BETTER_AUTH_URL=$BETTER_AUTH_URL
 
 RUN bun install --frozen-lockfile
 RUN bunx turbo run build --filter=@cortex/web
@@ -32,7 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
-ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV RAILWAY_ENV=true
 ENV NEXT_PUBLIC_SLIM_DEPLOY=true
@@ -43,9 +47,9 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/node_modules ./node_modules
 
-EXPOSE 3000
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD bun -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.json()).then(j=>process.exit(j.db?0:1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>r.json()).then(j=>process.exit(j.db?0:1)).catch(()=>process.exit(1))"
 
 CMD ["bun", "run", "start:web"]
