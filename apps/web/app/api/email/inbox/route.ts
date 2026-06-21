@@ -1,15 +1,24 @@
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/auth';
-import { listGmailThreads } from '@/lib/gmail';
+import { listGmailThreads, listGmailThreadsQuick } from '@/lib/gmail';
 
 export const maxDuration = 60;
 
 export const GET = withAuth(
-  async (_request, { tenant }) => {
+  async (request, { tenant }) => {
+    const url = new URL(request.url);
+    const quick = url.searchParams.get('quick') === '1';
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? 30) || 30, 50);
+
     try {
-      const threads = await listGmailThreads(tenant.tenantId, 30);
-      return NextResponse.json(threads);
+      const threads = quick
+        ? await listGmailThreadsQuick(tenant.tenantId, limit)
+        : await listGmailThreads(tenant.tenantId, limit);
+
+      return NextResponse.json(threads, {
+        headers: quick ? undefined : { 'Cache-Control': 'private, max-age=30' },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load inbox';
       return NextResponse.json({ error: message, threads: [] }, { status: 502 });
