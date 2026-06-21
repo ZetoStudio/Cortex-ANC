@@ -9,13 +9,14 @@ URL="${DATABASE_URL:?DATABASE_URL is required}"
 echo "→ Running Cortex database migrations…"
 
 for f in scripts/migrations/*.sql; do
-  echo "  · $(basename "$f")"
+  base=$(basename "$f")
+  # 008 alters Better Auth "user" table — create auth schema first.
+  if [ "$base" = "008_employee_portal.sql" ]; then
+    echo "→ Better Auth tables (required before $base)…"
+    bash scripts/migrate-auth.sh
+  fi
+  echo "  · $base"
   psql "$URL" -v ON_ERROR_STOP=1 -f "$f"
 done
-
-if [ -f scripts/migrate-auth.sh ]; then
-  echo "→ Better Auth tables…"
-  bash scripts/migrate-auth.sh || true
-fi
 
 echo "✅ Migrations complete"
