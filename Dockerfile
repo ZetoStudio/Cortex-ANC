@@ -45,6 +45,7 @@ COPY --from=builder /app/package.json /app/bun.lock /app/tsconfig.base.json ./
 COPY --from=builder /app/apps/web ./apps/web
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/services/temporal-worker ./services/temporal-worker
 COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 8080

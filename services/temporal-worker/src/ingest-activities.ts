@@ -31,7 +31,36 @@ import type { IngestActivityInput } from './types';
 
 const GOOGLE_PROVIDERS = ['google-workspace', 'gmail', 'google'];
 const GITHUB_PROVIDERS = ['github'];
-const FETCH_CONCURRENCY = 10;
+const FETCH_CONCURRENCY = 12;
+const NOTION_PAGE_CONCURRENCY = 8;
+const GITHUB_REPO_CONCURRENCY = 4;
+
+type GmailPart = {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+};
+
+function decodeBase64Url(data: string): string {
+  const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(normalized, 'base64').toString('utf8');
+}
+
+function extractGmailBody(part: GmailPart | undefined): string {
+  if (!part) return '';
+  if (part.body?.data) {
+    return decodeBase64Url(part.body.data);
+  }
+  if (part.parts?.length) {
+    const plain = part.parts.find((p) => p.mimeType === 'text/plain');
+    if (plain) return extractGmailBody(plain);
+    return part.parts
+      .map((p) => extractGmailBody(p))
+      .filter(Boolean)
+      .join('\n');
+  }
+  return '';
+}
 
 function sanitizeText(text: string): string {
   return text.replace(/\0/g, '').trim();
@@ -134,15 +163,26 @@ export async function ingestGmailActivity(input: IngestActivityInput): Promise<n
 
   const since = await resolveSince(input.tenantId, 'google', input.since);
   const q = gmailSinceQuery(since);
-  const listUrl = q
-    ? `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=500&q=${encodeURIComponent(q)}`
-    : 'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=500';
+  const messages: Array<{ id: string }> = [];
+  let pageToken: string | undefined;
 
-  const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
-  if (!listRes.ok) return 0;
+  do {
+    const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
+    url.searchParams.set('maxResults', '500');
+    if (q) url.searchParams.set('q', q);
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-  const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
-  const messages = list.messages ?? [];
+    const listRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+    if (!listRes.ok) break;
+
+    const list = (await listRes.json()) as {
+      messages?: Array<{ id: string }>;
+      nextPageToken?: string;
+    };
+    messages.push(...(list.messages ?? []));
+    pageToken = list.nextPageToken;
+  } while (pageToken);
+
   const docs: IngestDocInput[] = [];
 
   await mapInParallel(messages, FETCH_CONCURRENCY, async (msg) => {
@@ -153,14 +193,16 @@ export async function ingestGmailActivity(input: IngestActivityInput): Promise<n
     if (!detail.ok) return;
     const data = (await detail.json()) as {
       snippet?: string;
-      payload?: { headers?: Array<{ name: string; value: string }> };
+      payload?: GmailPart & { headers?: Array<{ name: string; value: string }> };
     };
     const subject =
       data.payload?.headers?.find((h) => h.name.toLowerCase() === 'subject')?.value ?? 'Email';
+    const body = extractGmailBody(data.payload).trim() || (data.snippet ?? '');
+    if (!body.trim()) return;
     docs.push({
       tenantId: input.tenantId,
       docId: `${input.tenantId}:gmail:${msg.id}`,
-      text: data.snippet ?? '',
+      text: body.slice(0, 100_000),
       title: subject,
       source: 'gmail',
       type: 'email',
@@ -181,14 +223,27 @@ export async function ingestGoogleDriveActivity(input: IngestActivityInput): Pro
   const since = await resolveSince(input.tenantId, 'google', input.since);
   const driveQ = since ? `trashed=false and modifiedTime > '${since}'` : 'trashed=false';
 
-  const listRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?pageSize=200&fields=files(id,name,mimeType)&q=${encodeURIComponent(driveQ)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!listRes.ok) return 0;
-  const list = (await listRes.json()) as {
-    files?: Array<{ id: string; name: string; mimeType: string }>;
-  };
+  const allFiles: Array<{ id: string; name: string; mimeType: string }> = [];
+  let pageToken: string | undefined;
+
+  do {
+    const url = new URL('https://www.googleapis.com/drive/v3/files');
+    url.searchParams.set('pageSize', '200');
+    url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType)');
+    url.searchParams.set('q', driveQ);
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const listRes = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!listRes.ok) break;
+    const list = (await listRes.json()) as {
+      files?: Array<{ id: string; name: string; mimeType: string }>;
+      nextPageToken?: string;
+    };
+    allFiles.push(...(list.files ?? []));
+    pageToken = list.nextPageToken;
+  } while (pageToken);
 
   const GOOGLE_EXPORT: Record<string, string> = {
     'application/vnd.google-apps.document': 'text/plain',
@@ -196,7 +251,7 @@ export async function ingestGoogleDriveActivity(input: IngestActivityInput): Pro
     'application/vnd.google-apps.presentation': 'text/plain',
   };
 
-  const docResults = await mapInParallel(list.files ?? [], FETCH_CONCURRENCY, async (file) => {
+  const docResults = await mapInParallel(allFiles, FETCH_CONCURRENCY, async (file) => {
     let text = '';
     const exportMime = GOOGLE_EXPORT[file.mimeType];
     if (exportMime) {
@@ -245,26 +300,44 @@ export async function ingestGoogleCalendarActivity(input: IngestActivityInput): 
 
   const since = await resolveSince(input.tenantId, 'google', input.since);
   const now = new Date();
-  const min = since ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const max = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const listRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}&maxResults=250&singleEvents=true&orderBy=startTime`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!listRes.ok) return 0;
-  const list = (await listRes.json()) as {
-    items?: Array<{ id: string; summary?: string; description?: string; htmlLink?: string }>;
-  };
+  const min = since ?? new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  const max = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
 
-  const docs: IngestDocInput[] = (list.items ?? []).map((event) => ({
-    tenantId: input.tenantId,
-    docId: `${input.tenantId}:calendar:${event.id}`,
-    text: `${event.summary ?? 'Event'}\n${event.description ?? ''}`,
-    title: event.summary ?? 'Calendar event',
-    source: 'calendar',
-    type: 'event',
-    url: event.htmlLink,
-  }));
+  const docs: IngestDocInput[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+    url.searchParams.set('timeMin', min);
+    url.searchParams.set('timeMax', max);
+    url.searchParams.set('maxResults', '250');
+    url.searchParams.set('singleEvents', 'true');
+    url.searchParams.set('orderBy', 'startTime');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const listRes = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!listRes.ok) break;
+
+    const list = (await listRes.json()) as {
+      items?: Array<{ id: string; summary?: string; description?: string; htmlLink?: string }>;
+      nextPageToken?: string;
+    };
+
+    for (const event of list.items ?? []) {
+      docs.push({
+        tenantId: input.tenantId,
+        docId: `${input.tenantId}:calendar:${event.id}`,
+        text: `${event.summary ?? 'Event'}\n${event.description ?? ''}`,
+        title: event.summary ?? 'Calendar event',
+        source: 'calendar',
+        type: 'event',
+        url: event.htmlLink,
+      });
+    }
+    pageToken = list.nextPageToken;
+  } while (pageToken);
 
   const count = await indexIngestDocs(docs, chunkText);
   await updateOnboarding(input.tenantId, { calendar: count });
@@ -289,13 +362,13 @@ export async function ingestGoogleContactsActivity(input: IngestActivityInput): 
     }>;
   };
 
-  let count = 0;
+  const docs: IngestDocInput[] = [];
   for (const person of list.connections ?? []) {
     const name = person.names?.[0]?.displayName ?? 'Contact';
     const email = person.emailAddresses?.[0]?.value ?? '';
     const org = person.organizations?.[0]?.name ?? '';
     const id = person.resourceName?.replace('people/', '') ?? name;
-    count += await indexIngestDoc({
+    docs.push({
       tenantId: input.tenantId,
       docId: `${input.tenantId}:contact:${id}`,
       text: `${name}\n${email}\n${org}`,
@@ -308,6 +381,8 @@ export async function ingestGoogleContactsActivity(input: IngestActivityInput): 
       name,
     });
   }
+
+  const count = await indexIngestDocs(docs, chunkText);
 
   await updateOnboarding(input.tenantId, { contacts: count });
   return count;
@@ -396,9 +471,7 @@ export async function ingestGitHubActivity(input: IngestActivityInput): Promise<
   const allowed = new Set(scopedRepos);
   const repos = allRepos.filter((repo) => allowed.has(repo.full_name));
 
-  let count = 0;
-
-  for (const repo of repos) {
+  const repoCounts = await mapInParallel(repos, GITHUB_REPO_CONCURRENCY, async (repo) => {
     const clientProjectId = projectIdForRepo(projects, repo.full_name);
     const repoMeta = {
       project: repo.full_name,
@@ -524,13 +597,10 @@ export async function ingestGitHubActivity(input: IngestActivityInput): Promise<
       repoDocs.push(...fileDocs.filter((d): d is IngestDocInput => d !== null));
     }
 
-    const repoCount = await indexIngestDocs(repoDocs, chunkText);
-    count += repoCount;
-    await upsertIngestionProgress(input.tenantId, 'github', {
-      processed_documents: count,
-      status: 'running',
-    });
-  }
+    return indexIngestDocs(repoDocs, chunkText);
+  });
+
+  const count = repoCounts.reduce((sum, n) => sum + n, 0);
 
   await upsertIngestionProgress(input.tenantId, 'github', {
     status: 'completed',
@@ -619,16 +689,10 @@ export async function ingestNotionActivity(input: IngestActivityInput): Promise<
     status: 'running',
   });
 
-  let count = 0;
-  let processed = 0;
-
-  for (const page of pages) {
+  const pageResults = await mapInParallel(pages, NOTION_PAGE_CONCURRENCY, async (page) => {
     try {
       const text = await getPageContent(token, page.id);
-      if (!text.trim()) {
-        processed += 1;
-        continue;
-      }
+      if (!text.trim()) return { chunks: 0, processed: 1 };
 
       const chunks = chunkTextWithOverlap(text);
       const ingestChunks = chunks.map((chunk, i) => ({
@@ -646,7 +710,7 @@ export async function ingestNotionActivity(input: IngestActivityInput): Promise<
         extraMeta: { last_edited: page.lastEdited },
       }));
 
-      count += await indexChunksBatch(ingestChunks);
+      const indexed = await indexChunksBatch(ingestChunks);
 
       await upsertNeo4jNode(input.tenantId, 'Document', {
         id: `${input.tenantId}:notion:${page.id}`,
@@ -654,47 +718,48 @@ export async function ingestNotionActivity(input: IngestActivityInput): Promise<
         source: 'notion',
       });
 
-      const entityRaw = await llmClient.complete(
-        `Extract JSON {people:[],projects:[],concepts:[]} from this Notion page text. Return only JSON.\n${text.slice(0, 2000)}`,
-        { temperature: 0, maxTokens: 512 },
-      );
-      try {
-        const parsed = JSON.parse(entityRaw.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as {
-          people?: string[];
-          projects?: string[];
-          concepts?: string[];
-        };
-        for (const p of parsed.people ?? []) {
-          await upsertNeo4jNode(input.tenantId, 'Person', {
-            id: p.toLowerCase().replace(/\s+/g, '-'),
-            name: p,
-          });
+      if (process.env.USE_LLM_ENTITY_EXTRACTION === 'true') {
+        const entityRaw = await llmClient.complete(
+          `Extract JSON {people:[],projects:[],concepts:[]} from this Notion page text. Return only JSON.\n${text.slice(0, 2000)}`,
+          { temperature: 0, maxTokens: 512 },
+        );
+        try {
+          const parsed = JSON.parse(entityRaw.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as {
+            people?: string[];
+            projects?: string[];
+            concepts?: string[];
+          };
+          for (const p of parsed.people ?? []) {
+            await upsertNeo4jNode(input.tenantId, 'Person', {
+              id: p.toLowerCase().replace(/\s+/g, '-'),
+              name: p,
+            });
+          }
+          for (const p of parsed.projects ?? []) {
+            await upsertNeo4jNode(input.tenantId, 'Project', {
+              id: p.toLowerCase().replace(/\s+/g, '-'),
+              name: p,
+            });
+          }
+          for (const c of parsed.concepts ?? []) {
+            await upsertNeo4jNode(input.tenantId, 'Concept', {
+              id: c.toLowerCase().replace(/\s+/g, '-'),
+              name: c,
+            });
+          }
+        } catch {
+          // skip entity parse errors
         }
-        for (const p of parsed.projects ?? []) {
-          await upsertNeo4jNode(input.tenantId, 'Project', {
-            id: p.toLowerCase().replace(/\s+/g, '-'),
-            name: p,
-          });
-        }
-        for (const c of parsed.concepts ?? []) {
-          await upsertNeo4jNode(input.tenantId, 'Concept', {
-            id: c.toLowerCase().replace(/\s+/g, '-'),
-            name: c,
-          });
-        }
-      } catch {
-        // skip entity parse errors
       }
-    } catch {
-      // skip page on fetch errors
-    }
 
-    processed += 1;
-    await upsertIngestionProgress(input.tenantId, 'notion', {
-      processed_documents: processed,
-      status: 'running',
-    });
-  }
+      return { chunks: indexed, processed: 1 };
+    } catch {
+      return { chunks: 0, processed: 1 };
+    }
+  });
+
+  const count = pageResults.reduce((sum, r) => sum + r.chunks, 0);
+  const processed = pageResults.reduce((sum, r) => sum + r.processed, 0);
 
   await upsertIngestionProgress(input.tenantId, 'notion', {
     status: 'completed',
