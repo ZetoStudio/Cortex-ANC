@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mail, Reply, Send } from 'lucide-react';
 import { type SourceCitationProps } from '@cortex/ui';
 
@@ -39,7 +39,7 @@ function formatDate(raw: string): string {
   }
 }
 
-const INBOX_STORAGE_KEY = 'cortex-email-inbox-v1';
+const INBOX_STORAGE_KEY = 'cortex-email-inbox-v2';
 
 function readCachedInbox(): ThreadSummary[] | null {
   if (typeof window === 'undefined') return null;
@@ -76,21 +76,9 @@ export function EmailDeskPage() {
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendOk, setSendOk] = useState(false);
-  const hadCachedInbox = useRef(Boolean(readCachedInbox()?.length));
 
   useEffect(() => {
     let cancelled = false;
-
-    async function loadQuick() {
-      const res = await fetch('/api/email/inbox?quick=1&limit=30');
-      const data = (await res.json()) as ThreadSummary[] & { error?: string };
-      if (cancelled) return;
-      if (!res.ok) throw new Error(data.error ?? 'Failed to load inbox');
-      const quick = Array.isArray(data) ? data : [];
-      setThreads(quick);
-      setLoadingInbox(false);
-      return quick;
-    }
 
     async function loadFull() {
       setHydratingInbox(true);
@@ -100,6 +88,8 @@ export function EmailDeskPage() {
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error ?? 'Failed to load inbox');
         const full = Array.isArray(data) ? data : [];
+        const hasMetadata = full.some((t) => t.from.trim() && t.from !== 'Unknown');
+        if (!hasMetadata) throw new Error('Inbox metadata unavailable');
         setThreads(full);
         writeCachedInbox(full);
       } finally {
@@ -108,20 +98,14 @@ export function EmailDeskPage() {
     }
 
     void (async () => {
-      let hasRows = hadCachedInbox.current;
       try {
-        if (!hasRows) {
-          await loadQuick();
-          hasRows = true;
-        } else {
-          setLoadingInbox(false);
-        }
         await loadFull();
       } catch (e) {
-        if (!cancelled && !hasRows) {
+        if (!cancelled) {
           setInboxError(e instanceof Error ? e.message : 'Failed to load inbox');
-          setLoadingInbox(false);
         }
+      } finally {
+        if (!cancelled) setLoadingInbox(false);
       }
     })();
 

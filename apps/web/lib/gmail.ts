@@ -21,10 +21,10 @@ export type GmailThreadDetail = {
 
 const GMAIL_TIMEOUT_MS = 20_000;
 const INBOX_CACHE_TTL_SEC = 45;
-const BATCH_BOUNDARY = 'cortex_gmail_batch';
+const FETCH_CONCURRENCY = 15;
 
 function inboxCacheKey(tenantId: string, maxResults: number): string {
-  return `gmail:inbox:${tenantId}:${maxResults}`;
+  return `gmail:inbox:v2:${tenantId}:${maxResults}`;
 }
 
 export function invalidateGmailInboxCache(tenantId: string): void {
@@ -96,73 +96,51 @@ function summaryFromThreadDetail(
   };
 }
 
-function parseBatchJsonBodies(responseText: string): unknown[] {
-  const results: unknown[] = [];
-  const parts = responseText.split(`--${BATCH_BOUNDARY}`);
-  for (const part of parts) {
-    const jsonStart = part.indexOf('{');
-    if (jsonStart === -1) continue;
-    const jsonEnd = part.lastIndexOf('}');
-    if (jsonEnd <= jsonStart) continue;
-    try {
-      results.push(JSON.parse(part.slice(jsonStart, jsonEnd + 1)));
-    } catch {
-      // skip malformed batch part
-    }
+async function mapInParallel<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    results.push(...(await Promise.all(batch.map(fn))));
   }
   return results;
 }
 
-/** Fetch thread metadata in one Gmail batch HTTP request (avoids N+1 round trips). */
-async function batchFetchThreadMetadata(
+async function fetchThreadMetadata(
   token: string,
   threads: Array<{ id: string; snippet?: string }>,
 ): Promise<GmailThreadSummary[]> {
   if (threads.length === 0) return [];
 
-  const body =
-    threads
-      .map(
-        (thread, index) =>
-          `--${BATCH_BOUNDARY}\r\nContent-Type: application/http\r\nContent-ID: ${index + 1}\r\n\r\nGET /gmail/v1/users/me/threads/${thread.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date\r\n\r\n`,
-      )
-      .join('') + `--${BATCH_BOUNDARY}--`;
-
-  const res = await fetch('https://www.googleapis.com/batch/gmail/v1', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': `multipart/mixed; boundary=${BATCH_BOUNDARY}`,
-    },
-    body,
-    signal: AbortSignal.timeout(GMAIL_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Gmail batch failed: ${await res.text()}`);
-  }
-
-  const responseText = await res.text();
-  const parsed = parseBatchJsonBodies(responseText);
-  const byId = new Map<string, (typeof parsed)[number]>();
-  for (const item of parsed) {
-    const row = item as { id?: string };
-    if (row.id) byId.set(row.id, item);
-  }
-
-  return threads.map((thread) => {
-    const detail = byId.get(thread.id) as
-      | {
-          id?: string;
-          snippet?: string;
-          messages?: Array<{
-            labelIds?: string[];
-            payload?: { headers?: Array<{ name: string; value: string }> };
-          }>;
-        }
-      | undefined;
-
-    if (!detail?.id) {
+  return mapInParallel(threads, FETCH_CONCURRENCY, async (thread) => {
+    try {
+      const detailRes = await gmailFetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${thread.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+        token,
+      );
+      if (!detailRes.ok) {
+        return {
+          threadId: thread.id,
+          snippet: thread.snippet ?? '',
+          from: 'Unknown',
+          subject: '(no subject)',
+          date: new Date().toISOString(),
+          unread: false,
+        };
+      }
+      const detail = (await detailRes.json()) as {
+        id: string;
+        snippet?: string;
+        messages?: Array<{
+          labelIds?: string[];
+          payload?: { headers?: Array<{ name: string; value: string }> };
+        }>;
+      };
+      return summaryFromThreadDetail(detail, thread.snippet ?? '');
+    } catch {
       return {
         threadId: thread.id,
         snippet: thread.snippet ?? '',
@@ -172,11 +150,6 @@ async function batchFetchThreadMetadata(
         unread: false,
       };
     }
-
-    return summaryFromThreadDetail(
-      { id: detail.id, snippet: detail.snippet, messages: detail.messages },
-      thread.snippet ?? '',
-    );
   });
 }
 
@@ -235,19 +208,7 @@ export async function listGmailThreads(
   const threads = await fetchThreadList(token, maxResults);
   if (threads.length === 0) return [];
 
-  let summaries: GmailThreadSummary[];
-  try {
-    summaries = await batchFetchThreadMetadata(token, threads);
-  } catch {
-    summaries = threads.map((thread) => ({
-      threadId: thread.id,
-      snippet: thread.snippet ?? '',
-      from: 'Unknown',
-      subject: '(no subject)',
-      date: new Date().toISOString(),
-      unread: false,
-    }));
-  }
+  const summaries = await fetchThreadMetadata(token, threads);
 
   void cacheSet(cacheKey, JSON.stringify(summaries), INBOX_CACHE_TTL_SEC);
   return summaries;
