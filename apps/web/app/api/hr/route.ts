@@ -23,7 +23,7 @@ import {
   HR_PLUGIN_CATALOG,
 } from '@cortex/shared';
 
-export const GET = withHrAuth(async (_request, { tenant }) => {
+export const GET = withHrAuth(async (_request, { tenant, user }) => {
   const employees = await listHrEmployees(tenant);
 
   const [stats, payroll, payslips, leave, notices, plugins, pendingApprovals] = await Promise.all([
