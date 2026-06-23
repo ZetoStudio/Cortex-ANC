@@ -1,12 +1,25 @@
+import { randomUUID } from 'node:crypto';
+
+import pg from 'pg';
+import type { UnifiedDocument } from '@cortex/shared';
 import { createLogger, llmClient, type LlmProvider } from '@cortex/shared';
 
-import { hybridRetrieveContext } from '../hybrid-retrieval';
+import { retrieve, type RetrievalStrategy, type TaskType } from '../retrieval-router';
 import type { SourceCitation } from '../retrieval';
 import { requestWriteAction } from '../tools/write-actions';
 
 import { getCachedAnswer, setCachedAnswer } from './query-cache';
 
+const { Pool } = pg;
+
 const log = createLogger('cortex-brain');
+
+const CORTEX_SYSTEM_PROMPT = `You are Cortex, an executive intelligence assistant.
+Answer using ONLY the provided context.
+Be direct and specific.
+Cite sources as [SOURCE | TYPE | TITLE] inline.
+If context is insufficient, say so — do not hallucinate.
+Optimise for speed: lead with the answer, then evidence.`;
 
 export type BrainState = {
   query: string;
@@ -96,9 +109,60 @@ function formatCitations(sources: SourceCitation[]): string {
     .join('\n');
 }
 
+function buildContextFromDocs(docs: UnifiedDocument[]): string {
+  return docs
+    .map(
+      (doc) =>
+        `[${doc.source.toUpperCase()} | ${doc.type} | ${doc.title}]\n` +
+        doc.contentChunks.map((chunk) => chunk.text).join('\n'),
+    )
+    .join('\n\n---\n\n');
+}
+
+function docsToCitations(docs: UnifiedDocument[]): SourceCitation[] {
+  return docs.map((doc, index) => ({
+    id: doc.id,
+    title: doc.title,
+    source: doc.source,
+    excerpt: doc.contentChunks
+      .map((chunk) => chunk.text)
+      .join(' ')
+      .slice(0, 160),
+    score: Math.max(0.1, 1 - index * 0.05),
+    url: doc.sourceUrl || undefined,
+  }));
+}
+
+function getQueryPool(): pg.Pool | null {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) return null;
+  return new Pool({ connectionString: dbUrl });
+}
+
+async function logQaSession(
+  query: string,
+  answer: string,
+  tenantId: string | undefined,
+  metadata: { strategy: RetrievalStrategy; taskType: TaskType; docCount: number },
+): Promise<void> {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) return;
+
+  const pool = new Pool({ connectionString: dbUrl });
+  try {
+    await pool.query(
+      `INSERT INTO qa_logs (id, query, answer, verdict, reason, tenant_id)
+       VALUES ($1, $2, $3, 'pass', $4, $5)`,
+      [randomUUID(), query, answer, JSON.stringify(metadata), tenantId ?? null],
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
 /**
  * Cortex Brain — multi-agent pipeline:
- * reasoning → hybrid retrieval → action gate → cited response
+ * reasoning → routed retrieval → action gate → cited response
  */
 export async function runBrain(
   query: string,
@@ -163,14 +227,33 @@ export async function runBrain(
   }
 
   steps.push('retrieval');
-  const { context, sources, graphContext } = await hybridRetrieveContext(query, 8, {
-    tenantId: options?.tenantId,
-    projectIds: options?.projectIds,
-    includeCompanyScope: options?.includeCompanyScope,
-    provider: options?.provider,
-    history: options?.history,
-  });
-  log.debug({ docCount: sources.length, graph: !!graphContext }, 'retrieval complete');
+  const pool = getQueryPool();
+  const tenantId = options?.tenantId ?? 'default';
+  const userId = 'brain';
+  const userRole = 'ceo';
+  const groqApiKey = process.env.GROQ_API_KEY ?? '';
+
+  let context = '';
+  let sources: SourceCitation[] = [];
+  let strategy: RetrievalStrategy = 'rag';
+  let taskType: TaskType = 'factual_qa';
+  let docCount = 0;
+
+  if (pool) {
+    try {
+      const retrieval = await retrieve(query, tenantId, userId, userRole, groqApiKey, pool);
+      strategy = retrieval.strategy;
+      taskType = retrieval.taskType;
+      docCount = retrieval.docs.length;
+      context = buildContextFromDocs(retrieval.docs);
+      sources = docsToCitations(retrieval.docs);
+      log.debug({ docCount, strategy, taskType }, 'retrieval complete');
+    } finally {
+      await pool.end();
+    }
+  } else {
+    log.debug({ docCount: 0 }, 'retrieval skipped — no DATABASE_URL');
+  }
 
   steps.push('action');
   let pendingApprovalId: string | undefined;
@@ -198,18 +281,20 @@ export async function runBrain(
 
   const answer = await llmClient.complete(
     skipReasoning
-      ? `${historyBlock}User local time: ${localTime}\n\nContext:\n${context || '(no documents)'}${
-          graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
-        }\n\nQuestion: ${query}\n\nAnswer directly. For emails, always state sender (From) and date.`
-      : `${historyBlock}User local time: ${localTime}\n\nSub-questions to address:\n${plan}\n\nContext:\n${context || '(no documents)'}${
-          graphContext ? `\n\nKnowledge graph:\n${graphContext}` : ''
-        }\n\nQuestion: ${query}`,
-    { ...llmOpts, agentRole: 'response', temperature: 0.35, maxTokens: 512 },
+      ? `${historyBlock}User local time: ${localTime}\n\nContext:\n${context || '(no documents)'}\n\nQuestion: ${query}\n\nAnswer directly. For emails, always state sender (From) and date.`
+      : `${historyBlock}User local time: ${localTime}\n\nSub-questions to address:\n${plan}\n\nContext:\n${context || '(no documents)'}\n\nQuestion: ${query}`,
+    {
+      ...llmOpts,
+      systemPrompt: CORTEX_SYSTEM_PROMPT,
+      temperature: 0.35,
+      maxTokens: 512,
+    },
   );
 
-  log.info({ steps, ms: Date.now() - start }, 'brain run complete');
+  log.info({ steps, ms: Date.now() - start, strategy, taskType, docCount }, 'brain run complete');
 
   setCachedAnswer(query, answer);
+  await logQaSession(query, answer, options?.tenantId, { strategy, taskType, docCount });
 
   return {
     answer,

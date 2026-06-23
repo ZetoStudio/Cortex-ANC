@@ -179,7 +179,7 @@ export async function getBlockerRadar(tenant: TenantContext): Promise<BlockerIte
      FROM cortex_documents
      WHERE tenant_id = $1
        AND metadata->>'source' IN ('github', 'linear')
-       AND metadata->>'type' IN ('issue', 'task', 'pull_request')
+       AND document_type IN ('issue', 'pull_request', 'ticket')
        AND created_at < NOW() - INTERVAL '7 days'
      ORDER BY created_at ASC
      LIMIT 12`,
