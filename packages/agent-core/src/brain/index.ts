@@ -255,6 +255,56 @@ export async function runBrain(
     log.debug({ docCount: 0 }, 'retrieval skipped — no DATABASE_URL');
   }
 
+  let briefing: string | undefined;
+  const needsBriefing =
+    /\b(brief\s*(me|ing)|meeting\s*prep|prep\s*(me\s*)?for|what('s| is)\s*(my|on)\s*(today|upcoming|calendar|meeting)|what do i have|what does my day look)\b/i.test(
+      query,
+    );
+  if (needsBriefing && pool) {
+    steps.push('briefing');
+    try {
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
+      const eventResult = await pool.query(
+        `SELECT id, title, metadata
+         FROM cortex_documents
+         WHERE tenant_id = $1
+           AND metadata->>'source' = 'calendar'
+           AND metadata->>'type' = 'event'
+           AND metadata->'start'->>'dateTime' >= $2
+           AND metadata->'start'->>'dateTime' < $3
+         ORDER BY metadata->'start'->>'dateTime'
+         LIMIT 10`,
+        [tenantId, startOfDay.toISOString(), endOfDay.toISOString()],
+      );
+
+      if (eventResult.rows.length > 0) {
+        const eventsFormatted = eventResult.rows
+          .map((r: { title: string; metadata: Record<string, unknown> }) => {
+            const meta = r.metadata as Record<string, unknown>;
+            const start = meta.start as Record<string, string> | undefined;
+            const time = start?.dateTime?.slice(11, 16) ?? '?';
+            return `- ${time}  ${r.title}`;
+          })
+          .join('\n');
+        briefing = await llmClient.complete(
+          `Today's meetings:\n${eventsFormatted}\n\nProvide a concise executive briefing for a CEO — key meetings, people involved, and preparation notes.`,
+          {
+            ...llmOpts,
+            systemPrompt: 'You are an executive briefing assistant. Be concise and specific.',
+            temperature: 0.3,
+            maxTokens: 512,
+          },
+        );
+        context = `[EXECUTIVE BRIEFING]\n${briefing}\n\n---\n\n${context}`;
+        log.debug({ eventCount: eventResult.rows.length }, 'briefing complete');
+      }
+    } catch (err) {
+      log.debug({ err }, 'briefing retrieval failed');
+    }
+  }
+
   steps.push('action');
   let pendingApprovalId: string | undefined;
   const needsApproval =
