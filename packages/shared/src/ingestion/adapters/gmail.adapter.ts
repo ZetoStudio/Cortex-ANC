@@ -104,15 +104,27 @@ export default class GmailAdapter implements ConnectorAdapter {
     // TODO: paginate beyond the first 100 messages when incremental sync is expanded.
 
     const listRes = await connectorFetch(listMessagesUrl(afterCursor), { headers });
-    const list = (await listRes.json()) as { messages?: Array<{ id: string }> };
+    let listData: unknown;
+    try {
+      listData = await listRes.json();
+    } catch (e) {
+      throw new Error(`[gmail] Invalid JSON response for message list: ${e}`);
+    }
+    const list = listData as { messages?: Array<{ id: string }> };
     const messageIds = (list.messages ?? []).slice(0, 100);
 
     for (const message of messageIds) {
       const detailRes = await connectorFetch(messageUrl(message.id), { headers });
-      const data = (await detailRes.json()) as GmailMessage;
+      let data: unknown;
+      try {
+        data = await detailRes.json();
+      } catch (e) {
+        throw new Error(`[gmail] Invalid JSON response for item ${message.id}: ${e}`);
+      }
+      const parsed = data as GmailMessage;
       yield {
-        id: `gmail:${data.id}`,
-        raw: data,
+        id: `gmail:${parsed.id}`,
+        raw: parsed,
         fetchedAt: new Date(),
       };
     }

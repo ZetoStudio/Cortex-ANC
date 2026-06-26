@@ -1,18 +1,8 @@
 /** Connector ingestion adapter types — implementations live in per-source adapters. */
 
-export type ConnectorSource =
-  | 'gmail'
-  | 'google_drive'
-  | 'google_calendar'
-  | 'github'
-  | 'notion'
-  | 'slack'
-  | 'linear'
-  | 'jira'
-  | 'confluence'
-  | 'zoom'
-  | 'calendly'
-  | 'microsoft_365';
+import type { ConnectorSource } from './constants';
+
+export type { ConnectorSource };
 
 export type DocumentType =
   | 'email'

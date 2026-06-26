@@ -156,7 +156,8 @@ export async function runConnectorIngest(params: {
 }): Promise<{ processed: number; skipped: number; failed: number }> {
   const adapter = ADAPTER_REGISTRY[params.source];
   if (!adapter) {
-    throw new Error('No adapter for source');
+    console.warn('[ingest] no adapter registered', { source: params.source });
+    return { processed: 0, skipped: 0, failed: 0 };
   }
 
   const provider = sourceToProvider(params.source);
@@ -192,8 +193,21 @@ export async function runConnectorIngest(params: {
         const result = await upsertDocument({ ...doc, embedding, acl }, params.pool);
         if (result.skipped) skipped += 1;
         else processed += 1;
-      } catch {
+      } catch (e) {
+        if (e instanceof ConnectorRateLimitError) {
+          const waitMs = (e.retryAfter ?? 60) * 1000;
+          console.warn(`[ingest] rate limited on ${params.source}, waiting ${waitMs}ms`);
+          await sleep(waitMs);
+          throw e;
+        }
         failed += 1;
+        console.error('[ingest] item failed', {
+          tenantId: params.tenantId,
+          source: params.source,
+          rawId: raw?.id ?? 'unknown',
+          error: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : undefined,
+        });
       }
 
       if (seen % 10 === 0) {
@@ -206,10 +220,17 @@ export async function runConnectorIngest(params: {
       }
     }
 
+    return { processed, skipped, failed };
+  } catch (err) {
+    if (err instanceof ConnectorAuthError) {
+      await updateConnectorHealth(params.tenantId, provider, { status: 'error' }, params.pool);
+    }
+    throw err;
+  } finally {
     await updateConnectorHealth(
       params.tenantId,
       provider,
-      { cursor: lastCursor, status: 'connected' },
+      { cursor: lastCursor, status: failed === 0 ? 'connected' : 'degraded' },
       params.pool,
     );
 
@@ -218,12 +239,5 @@ export async function runConnectorIngest(params: {
       total_documents: seen,
       status: 'completed',
     });
-
-    return { processed, skipped, failed };
-  } catch (err) {
-    if (err instanceof ConnectorAuthError) {
-      await updateConnectorHealth(params.tenantId, provider, { status: 'error' }, params.pool);
-    }
-    throw err;
   }
 }

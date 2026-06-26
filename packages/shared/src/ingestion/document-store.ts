@@ -11,21 +11,7 @@ import type {
   EntityRef,
   UnifiedDocument,
 } from './adapter';
-
-const CONNECTOR_SOURCES: ConnectorSource[] = [
-  'gmail',
-  'google_drive',
-  'google_calendar',
-  'github',
-  'notion',
-  'slack',
-  'linear',
-  'jira',
-  'confluence',
-  'zoom',
-  'calendly',
-  'microsoft_365',
-];
+import { CONNECTOR_SOURCES, SOURCE_METADATA_KEY } from './constants';
 
 type CortexDocumentRow = QueryResultRow & {
   id: string;
@@ -92,11 +78,13 @@ async function withPoolTenant<T>(
   }
 }
 
-function documentContent(doc: Pick<UnifiedDocument, 'contentChunks'>): string {
-  return doc.contentChunks
-    .map((chunk) => chunk.text)
-    .filter(Boolean)
-    .join('\n\n');
+function docText(doc: UnifiedDocument & { content?: string }): string {
+  if (doc.contentChunks?.length) {
+    return doc.contentChunks.map((c) => c.text).join('\n\n');
+  }
+  // Bridge: rows written before unified pipeline use `content` column directly.
+  // Remove fallback after next full resync post-pipeline-convergence.
+  return doc.content ?? '';
 }
 
 function buildMetadata(doc: Omit<UnifiedDocument, 'embedding'>): Record<string, unknown> {
@@ -158,6 +146,10 @@ function emptyStats(): Record<ConnectorSource, { count: number; lastUpdated: Dat
   ) as Record<ConnectorSource, { count: number; lastUpdated: Date | null }>;
 }
 
+function toJsonb(value: unknown): string {
+  return JSON.stringify(value);
+}
+
 export async function upsertDocument(
   doc: Omit<UnifiedDocument, 'embedding'> & { embedding: number[] },
   pool: Pool,
@@ -165,14 +157,18 @@ export async function upsertDocument(
   void pool;
 
   const ctx = ingestionTenantCtx(doc.tenantId);
+  const metadataSource =
+    typeof doc.metadata[SOURCE_METADATA_KEY] === 'string'
+      ? (doc.metadata[SOURCE_METADATA_KEY] as string)
+      : doc.source;
   const existing = await queryWithTenant<{ id: string; content_hash: string }>(
     ctx,
     `SELECT id, content_hash
      FROM cortex_documents
      WHERE tenant_id = $1
-       AND source_id = $2
-       AND metadata->>'source' = $3`,
-    [doc.tenantId, doc.sourceId, doc.source],
+       AND (id = $2 OR (source_id = $3 AND metadata->>'source' = $4))
+     LIMIT 1`,
+    [doc.tenantId, doc.id, doc.sourceId, metadataSource],
   );
 
   const row = existing.rows[0];
@@ -180,24 +176,24 @@ export async function upsertDocument(
     return { inserted: false, skipped: true };
   }
 
-  const content = documentContent(doc);
+  const content = docText(doc as UnifiedDocument & { content?: string });
   const metadata = buildMetadata(doc);
   const vectorLiteral = toVectorLiteral(doc.embedding);
   const columnParams = [
     content,
-    metadata,
+    toJsonb(metadata),
     vectorLiteral,
     doc.tenantId,
-    doc.acl,
-    doc.contentChunks,
+    toJsonb(doc.acl),
+    toJsonb(doc.contentChunks),
     doc.contentHash,
     doc.sourceId,
     doc.sourceUrl,
-    doc.entityRefs,
+    toJsonb(doc.entityRefs),
     doc.parentDocId ?? null,
     doc.cursor,
     doc.type,
-    doc.metadata,
+    toJsonb(doc.metadata),
     doc.createdAt,
   ];
 
@@ -206,19 +202,19 @@ export async function upsertDocument(
       ctx,
       `UPDATE cortex_documents SET
          content = $2,
-         metadata = $3,
+         metadata = $3::jsonb,
          embedding = $4::vector,
          tenant_id = $5,
-         acl = $6,
-         content_chunks = $7,
+         acl = $6::jsonb,
+         content_chunks = $7::jsonb,
          content_hash = $8,
          source_id = $9,
          source_url = $10,
-         entity_refs = $11,
+         entity_refs = $11::jsonb,
          parent_doc_id = $12,
          cursor_value = $13,
          document_type = $14,
-         unified_metadata = $15,
+         unified_metadata = $15::jsonb,
          created_at = $16
        WHERE id = $1`,
       [row.id, ...columnParams],
@@ -246,7 +242,7 @@ export async function upsertDocument(
        unified_metadata,
        created_at
      ) VALUES (
-       $1, $2, $3, $4::vector, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+       $1, $2, $3::jsonb, $4::vector, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, $16
      )`,
     [doc.id, ...columnParams],
   );

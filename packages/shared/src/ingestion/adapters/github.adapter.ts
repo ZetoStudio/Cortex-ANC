@@ -92,10 +92,22 @@ export default class GitHubAdapter implements ConnectorAdapter {
 
     for (const ownerRepo of repos) {
       const repoRes = await connectorFetch(repoMetadataUrl(ownerRepo), { headers });
-      const repo = (await repoRes.json()) as GitHubRepoRef;
+      let repoData: unknown;
+      try {
+        repoData = await repoRes.json();
+      } catch (e) {
+        throw new Error(`[github] Invalid JSON response for repo ${ownerRepo}: ${e}`);
+      }
+      const repo = repoData as GitHubRepoRef;
 
       const issuesRes = await connectorFetch(repoIssuesUrl(ownerRepo, cursor), { headers });
-      const issues = (await issuesRes.json()) as GitHubIssue[];
+      let issuesData: unknown;
+      try {
+        issuesData = await issuesRes.json();
+      } catch (e) {
+        throw new Error(`[github] Invalid JSON response for issues ${ownerRepo}: ${e}`);
+      }
+      const issues = issuesData as GitHubIssue[];
       for (const issue of issues) {
         yield {
           id: `github:issue:${ownerRepo}:${issue.id}`,
@@ -109,7 +121,13 @@ export default class GitHubAdapter implements ConnectorAdapter {
       }
 
       const pullsRes = await connectorFetch(repoPullsUrl(ownerRepo), { headers });
-      const pulls = (await pullsRes.json()) as GitHubPull[];
+      let pullsData: unknown;
+      try {
+        pullsData = await pullsRes.json();
+      } catch (e) {
+        throw new Error(`[github] Invalid JSON response for pulls ${ownerRepo}: ${e}`);
+      }
+      const pulls = pullsData as GitHubPull[];
       for (const pull of pulls) {
         if (cursor && pull.updated_at && pull.updated_at < cursor) continue;
         yield {

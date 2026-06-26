@@ -19,6 +19,13 @@ export * from './load-root-env';
 export * from './deploy';
 export * from './ingestion/progress';
 export * from './ingestion/embedding-cache';
+export {
+  CONNECTOR_SOURCES,
+  CORTEX_ROLES,
+  DEFAULT_ACL,
+  SOURCE_METADATA_KEY,
+  SOURCE_TYPE_KEY,
+} from './ingestion/constants';
 export type {
   ACLPolicy,
   ConnectorAdapter,

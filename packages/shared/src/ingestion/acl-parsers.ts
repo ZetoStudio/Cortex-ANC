@@ -1,11 +1,8 @@
 import type { ACLPolicy, ConnectorSource, RawItem, TenantContext } from './adapter';
+import { DEFAULT_ACL } from './constants';
 
 function defaultACL(): ACLPolicy {
-  return {
-    visibility: 'role',
-    allowedRoles: ['ceo', 'admin'],
-    sourcePermission: 'unknown',
-  };
+  return { ...DEFAULT_ACL };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -15,16 +12,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function safeParse(fn: () => ACLPolicy): ACLPolicy {
+function safeParse(source: ConnectorSource, raw: RawItem, fn: () => ACLPolicy): ACLPolicy {
   try {
     return fn();
-  } catch {
+  } catch (e) {
+    console.warn('[acl-parser] falling back to default ACL', {
+      source,
+      rawId: raw?.id,
+      reason: e instanceof Error ? e.message : String(e),
+    });
     return defaultACL();
   }
 }
 
 export function parseGmailACL(raw: RawItem, ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('gmail', raw, () => {
     const data = asRecord(raw.raw);
     const labelIds = Array.isArray(data?.labelIds)
       ? data.labelIds.filter((id): id is string => typeof id === 'string')
@@ -44,7 +46,7 @@ export function parseGmailACL(raw: RawItem, ctx: TenantContext): ACLPolicy {
 }
 
 export function parseGoogleDriveACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('google_drive', raw, () => {
     const data = asRecord(raw.raw);
     const permissions = Array.isArray(data?.permissions)
       ? data.permissions
@@ -75,14 +77,14 @@ export function parseGoogleDriveACL(raw: RawItem, _ctx: TenantContext): ACLPolic
 
     return {
       visibility: 'role',
-      allowedRoles: ['ceo', 'admin'],
+      allowedRoles: ['ceo', 'client', 'super_admin'],
       sourcePermission,
     };
   });
 }
 
 export function parseGoogleCalendarACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('google_calendar', raw, () => {
     const data = asRecord(raw.raw);
     const visibility = typeof data?.visibility === 'string' ? data.visibility : undefined;
     const sourcePermission = visibility ?? 'default';
@@ -93,14 +95,14 @@ export function parseGoogleCalendarACL(raw: RawItem, _ctx: TenantContext): ACLPo
 
     return {
       visibility: 'role',
-      allowedRoles: ['ceo', 'admin', 'hr'],
+      allowedRoles: ['ceo', 'client', 'super_admin', 'hr'],
       sourcePermission,
     };
   });
 }
 
 export function parseGitHubACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('github', raw, () => {
     const data = asRecord(raw.raw);
     const repository = asRecord(data?.repository);
     const isPrivate = repository?.private === true;
@@ -112,14 +114,14 @@ export function parseGitHubACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
 
     return {
       visibility: 'role',
-      allowedRoles: ['ceo', 'admin'],
+      allowedRoles: ['ceo', 'client', 'super_admin'],
       sourcePermission,
     };
   });
 }
 
 export function parseNotionACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('notion', raw, () => {
     const data = asRecord(raw.raw);
     const parent = asRecord(data?.parent);
     const parentType = typeof parent?.type === 'string' ? parent.type : undefined;
@@ -128,21 +130,21 @@ export function parseNotionACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
     if (parentType === 'workspace') {
       return {
         visibility: 'role',
-        allowedRoles: ['ceo', 'admin', 'hr'],
+        allowedRoles: ['ceo', 'client', 'super_admin', 'hr'],
         sourcePermission,
       };
     }
 
     return {
       visibility: 'role',
-      allowedRoles: ['ceo', 'admin'],
+      allowedRoles: ['ceo', 'client', 'super_admin'],
       sourcePermission,
     };
   });
 }
 
 export function parseSlackACL(raw: RawItem, ctx: TenantContext): ACLPolicy {
-  return safeParse(() => {
+  return safeParse('slack', raw, () => {
     const data = asRecord(raw.raw);
     const channelType = typeof data?.channel_type === 'string' ? data.channel_type : undefined;
     const sourcePermission = channelType ?? 'unknown';
@@ -175,18 +177,18 @@ export function parseSlackACL(raw: RawItem, ctx: TenantContext): ACLPolicy {
   });
 }
 
-export function parseLinearACL(_raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => ({
+export function parseLinearACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
+  return safeParse('linear', raw, () => ({
     visibility: 'role',
-    allowedRoles: ['ceo', 'admin'],
+    allowedRoles: ['ceo', 'client', 'super_admin'],
     sourcePermission: 'internal',
   }));
 }
 
-export function parseJiraACL(_raw: RawItem, _ctx: TenantContext): ACLPolicy {
-  return safeParse(() => ({
+export function parseJiraACL(raw: RawItem, _ctx: TenantContext): ACLPolicy {
+  return safeParse('jira', raw, () => ({
     visibility: 'role',
-    allowedRoles: ['ceo', 'admin'],
+    allowedRoles: ['ceo', 'client', 'super_admin'],
     sourcePermission: 'internal',
   }));
 }
@@ -213,7 +215,12 @@ export function parseACL(source: ConnectorSource, raw: RawItem, ctx: TenantConte
       default:
         return defaultACL();
     }
-  } catch {
+  } catch (e) {
+    console.warn('[acl-parser] falling back to default ACL', {
+      source,
+      rawId: raw?.id,
+      reason: e instanceof Error ? e.message : String(e),
+    });
     return defaultACL();
   }
 }

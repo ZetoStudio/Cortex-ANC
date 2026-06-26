@@ -88,7 +88,13 @@ export default class GoogleCalendarAdapter implements ConnectorAdapter {
     // TODO: paginate beyond the first 100 events when incremental sync is expanded.
 
     const listRes = await connectorFetch(listEventsUrl(cursor), { headers });
-    const list = (await listRes.json()) as { items?: CalendarEvent[] };
+    let listData: unknown;
+    try {
+      listData = await listRes.json();
+    } catch (e) {
+      throw new Error(`[google_calendar] Invalid JSON response for event list: ${e}`);
+    }
+    const list = listData as { items?: CalendarEvent[] };
 
     for (const event of list.items ?? []) {
       yield {

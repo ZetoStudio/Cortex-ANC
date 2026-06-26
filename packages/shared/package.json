@@ -58,6 +58,14 @@
       "types": "./dist/ingestion/embedder.d.ts",
       "import": "./dist/ingestion/embedder.js"
     },
+    "./ingestion/adapters": {
+      "types": "./dist/ingestion/adapters/index.d.ts",
+      "import": "./dist/ingestion/adapters/index.js"
+    },
+    "./db/tenant-pool": {
+      "types": "./dist/db/tenant-pool.d.ts",
+      "import": "./dist/db/tenant-pool.js"
+    },
     "./ingestion/ingest-runner": {
       "types": "./dist/ingestion/ingest-runner.d.ts",
       "import": "./dist/ingestion/ingest-runner.js"

@@ -111,26 +111,29 @@ function formatCitations(sources: SourceCitation[]): string {
 
 function buildContextFromDocs(docs: UnifiedDocument[]): string {
   return docs
-    .map(
-      (doc) =>
-        `[${doc.source.toUpperCase()} | ${doc.type} | ${doc.title}]\n` +
-        doc.contentChunks.map((chunk) => chunk.text).join('\n'),
-    )
+    .map((doc) => {
+      const text = doc.contentChunks?.length
+        ? doc.contentChunks.map((chunk) => chunk.text).join('\n')
+        : ((doc as UnifiedDocument & { content?: string }).content ?? '');
+      return `[${doc.source.toUpperCase()} | ${doc.type} | ${doc.title}]\n${text}`;
+    })
     .join('\n\n---\n\n');
 }
 
 function docsToCitations(docs: UnifiedDocument[]): SourceCitation[] {
-  return docs.map((doc, index) => ({
-    id: doc.id,
-    title: doc.title,
-    source: doc.source,
-    excerpt: doc.contentChunks
-      .map((chunk) => chunk.text)
-      .join(' ')
-      .slice(0, 160),
-    score: Math.max(0.1, 1 - index * 0.05),
-    url: doc.sourceUrl || undefined,
-  }));
+  return docs.map((doc, index) => {
+    const excerpt = doc.contentChunks?.length
+      ? doc.contentChunks.map((chunk) => chunk.text).join(' ')
+      : ((doc as UnifiedDocument & { content?: string }).content ?? '');
+    return {
+      id: doc.id,
+      title: doc.title,
+      source: doc.source,
+      excerpt: excerpt.slice(0, 160),
+      score: Math.max(0.1, 1 - index * 0.05),
+      url: doc.sourceUrl || undefined,
+    };
+  });
 }
 
 function getQueryPool(): pg.Pool | null {
@@ -155,6 +158,10 @@ async function logQaSession(
        VALUES ($1, $2, $3, 'pass', $4, $5)`,
       [randomUUID(), query, answer, JSON.stringify(metadata), tenantId ?? null],
     );
+  } catch (e) {
+    console.error('[brain] qa session logging failed (non-fatal)', {
+      error: e instanceof Error ? e.message : String(e),
+    });
   } finally {
     await pool.end();
   }
@@ -169,6 +176,7 @@ export async function runBrain(
   options?: {
     skipCache?: boolean;
     tenantId?: string;
+    userId?: string;
     projectIds?: string[];
     includeCompanyScope?: boolean;
     provider?: LlmProvider;
@@ -193,7 +201,11 @@ export async function runBrain(
   if (!options?.skipCache) {
     const liveQuery = /\b(latest|recent|last|newest)\b.*\b(email|mail)\b/i.test(query);
     if (!liveQuery) {
-      const cached = getCachedAnswer(query);
+      const cached = getCachedAnswer(
+        options?.tenantId ?? 'default',
+        options?.userId ?? 'brain',
+        query,
+      );
       if (cached) {
         return {
           answer: cached,
@@ -229,7 +241,7 @@ export async function runBrain(
   steps.push('retrieval');
   const pool = getQueryPool();
   const tenantId = options?.tenantId ?? 'default';
-  const userId = 'brain';
+  const userId = options?.userId ?? 'brain';
   const userRole = 'ceo';
   const groqApiKey = process.env.GROQ_API_KEY ?? '';
 
@@ -270,8 +282,8 @@ export async function runBrain(
         `SELECT id, title, metadata
          FROM cortex_documents
          WHERE tenant_id = $1
-           AND metadata->>'source' = 'calendar'
-           AND metadata->>'type' = 'event'
+           AND metadata->>'source' = 'google_calendar'
+           AND document_type = 'calendar_event'
            AND metadata->'start'->>'dateTime' >= $2
            AND metadata->'start'->>'dateTime' < $3
          ORDER BY metadata->'start'->>'dateTime'
@@ -343,7 +355,7 @@ export async function runBrain(
 
   log.info({ steps, ms: Date.now() - start, strategy, taskType, docCount }, 'brain run complete');
 
-  setCachedAnswer(query, answer);
+  setCachedAnswer(tenantId, userId, query, answer);
   await logQaSession(query, answer, options?.tenantId, { strategy, taskType, docCount });
 
   return {
