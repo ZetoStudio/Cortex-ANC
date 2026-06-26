@@ -31,4 +31,14 @@ for f in scripts/migrations/*.sql; do
   psql "$URL" -v ON_ERROR_STOP=1 -f "$f"
 done
 
+# Manual migrations (CONCURRENTLY indexes, etc.) live in scripts/migrations/manual/
+# and are NOT run automatically — see files there for usage.
+
+if [[ "${WIPE_DATABASE_ON_DEPLOY:-}" == "true" ]]; then
+  echo ""
+  echo "⚠️  WIPE_DATABASE_ON_DEPLOY=true — wiping all data (schema kept)"
+  echo "   Remove this env var after deploy so future deploys do not wipe again."
+  bash "$ROOT/scripts/wipe-data.sh"
+fi
+
 echo "✅ Migrations complete"
