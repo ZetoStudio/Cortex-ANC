@@ -42,9 +42,20 @@ WHERE content_hash = ''
    OR source_id = ''
    OR document_type = 'page';
 
--- 3. Indexes (CONCURRENTLY cannot run inside a transaction —
---    these are extracted and must be run manually after COMMIT
---    or via a separate migration step)
--- See post-migration script: scripts/migrations/012_indexes.sql
+-- 3. Indexes (non-CONCURRENT for automated deploy; see manual/012_indexes_concurrent.sql for zero-downtime ops)
+CREATE INDEX IF NOT EXISTS idx_cortex_docs_acl_visibility
+  ON cortex_documents USING gin(acl);
+
+CREATE INDEX IF NOT EXISTS idx_cortex_docs_content_hash
+  ON cortex_documents(tenant_id, content_hash);
+
+CREATE INDEX IF NOT EXISTS idx_cortex_docs_source_id
+  ON cortex_documents(tenant_id, source_id);
+
+CREATE INDEX IF NOT EXISTS idx_cortex_docs_entity_refs
+  ON cortex_documents USING gin(entity_refs);
+
+CREATE INDEX IF NOT EXISTS idx_cortex_docs_doc_type
+  ON cortex_documents(tenant_id, document_type);
 
 COMMIT;
