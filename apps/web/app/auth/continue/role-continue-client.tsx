@@ -206,7 +206,7 @@ export default function RoleContinueClient({
                     const normalized = normalizeCompanyName(companyName);
                     if (normalized) setCompanyName(normalized);
                   }}
-                  placeholder="e.g. Zeto"
+                  placeholder="e.g. Acme Corp"
                   className="input-dark mt-1.5"
                   required
                   autoFocus

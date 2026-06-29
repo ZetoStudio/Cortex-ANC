@@ -1,5 +1,5 @@
 import type { CortexRole } from '@cortex/auth';
-import { companySlugFromCode, displayCompanyNameFromInput, usesCompanyTenant } from '@cortex/auth';
+import { companySlugFromName, normalizeCompanyName } from '@cortex/auth';
 import type { Pool } from 'pg';
 
 /**
@@ -12,7 +12,8 @@ export async function resolveCompanyTenantId(
   currentTenantId: string,
   _role: CortexRole,
 ): Promise<string> {
-  if (!usesCompanyTenant(companyInput)) return currentTenantId;
+  const displayName = normalizeCompanyName(companyInput);
+  if (!displayName) return currentTenantId;
 
   const envTenant = process.env.COMPANY_TENANT_ID?.trim();
   if (envTenant) {
@@ -22,8 +23,7 @@ export async function resolveCompanyTenantId(
     if (hit.rows[0]) return hit.rows[0].id;
   }
 
-  const slug = companySlugFromCode(companyInput);
-  const displayName = displayCompanyNameFromInput(companyInput);
+  const slug = companySlugFromName(displayName);
 
   const bySlug = await pool.query<{ id: string }>(
     `SELECT id FROM tenants WHERE slug = $1 ORDER BY created_at ASC LIMIT 1`,

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import {
   redirectPathForRole,
-  resolveRoleFromPasskey,
+  resolveRoleFromAssignment,
   type ExecutiveRolePick,
   type RolePick,
 } from '@cortex/auth';
@@ -15,7 +15,6 @@ import { resolveCompanyTenantId } from '@/lib/company-tenant';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 type AssignRoleBody = {
-  code?: string;
   companyName?: string;
   rolePick?: RolePick;
   /** @deprecated use rolePick */
@@ -30,20 +29,15 @@ export const POST = withAuth(async (request, { user, tenant }) => {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const companyInput = (body.companyName ?? body.code ?? '').trim();
+  const companyInput = (body.companyName ?? '').trim();
   if (!companyInput) {
     return NextResponse.json({ error: 'Company name is required' }, { status: 400 });
   }
 
   const rolePick = body.rolePick ?? body.executivePick;
-  const role = resolveRoleFromPasskey(companyInput, rolePick);
+  const role = resolveRoleFromAssignment(rolePick);
   if (!role) {
-    return NextResponse.json(
-      {
-        error: rolePick ? 'Invalid company name' : 'Select your role and enter your company name',
-      },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: 'Select your role' }, { status: 401 });
   }
 
   const targetTenantId = await resolveCompanyTenantId(pool, companyInput, tenant.tenantId, role);
