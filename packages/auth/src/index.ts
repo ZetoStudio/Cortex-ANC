@@ -94,19 +94,10 @@ export function sessionToAuthUser(session: {
 }
 
 export {
-  COMPANY_CODE,
-  companySlugFromCode,
   companySlugFromName,
-  displayCompanyNameFromInput,
-  isCompanyPasskey,
-  isExecutivePasskey,
-  isLegacyEmployeeCode,
-  isLegacyHrCode,
-  isSuperAdminPasskey,
   normalizeCompanyName,
   redirectPathForRole,
-  resolveRoleFromPasskey,
-  usesCompanyTenant,
+  resolveRoleFromAssignment,
   type ExecutiveRolePick,
   type RolePick,
 } from './role-codes';
